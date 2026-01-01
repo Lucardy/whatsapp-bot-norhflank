@@ -182,20 +182,37 @@ function buildClient() {
 
   // Mensajes (tus respuestas)
   c.on('message', async (msg) => {
-    if (msg.fromMe) return;
-    if (msg.from === 'status@broadcast') return;
-    if (msg.from.endsWith('@g.us')) return;
-
     try {
-      const now = Date.now();
-      const last = __cooldown.get(msg.from) || 0;
-      if (now - last < 1500) return;
-      __cooldown.set(msg.from, now);
-    } catch {}
+      log('📨 Mensaje recibido - from:', msg.from, 'body:', (msg.body || '').substring(0, 50));
+      
+      if (msg.fromMe) {
+        log('⏭️ Ignorado: mensaje propio');
+        return;
+      }
+      if (msg.from === 'status@broadcast') {
+        log('⏭️ Ignorado: status broadcast');
+        return;
+      }
+      if (msg.from.endsWith('@g.us')) {
+        log('⏭️ Ignorado: mensaje de grupo');
+        return;
+      }
 
-    const texto = (msg.body || '').trim().toLowerCase();
-    const telefono = (msg.from || '').split('@')[0] || '';
-    const usuario = inscripcionesSorteo.get(msg.from);
+      try {
+        const now = Date.now();
+        const last = __cooldown.get(msg.from) || 0;
+        if (now - last < 1500) {
+          log('⏭️ Ignorado: cooldown activo');
+          return;
+        }
+        __cooldown.set(msg.from, now);
+      } catch {}
+
+      const texto = (msg.body || '').trim().toLowerCase();
+      const telefono = (msg.from || '').split('@')[0] || '';
+      const usuario = inscripcionesSorteo.get(msg.from);
+      
+      log('✅ Procesando mensaje - texto:', texto, 'teléfono:', telefono);
 
     if (usuario?.estado === 'esperando_nombre') {
       usuario.nombre = (msg.body || '').trim();
@@ -250,6 +267,9 @@ Por favor respondé este mensaje con tu nombre completo para finalizar tu inscri
 2️⃣ Consultar horarios  
 3️⃣ Hacer una reserva  
 4️⃣ Conocer nuestra ubicación`);
+    }
+    } catch (error) {
+      log('❌ Error procesando mensaje:', error?.message || error, error?.stack);
     }
   });
 
