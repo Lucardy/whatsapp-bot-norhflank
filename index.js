@@ -94,6 +94,7 @@ process.on('uncaughtException', (err) => log('⚠️ uncaughtException:', err));
 
 // ---- Fábrica del cliente (listeners se montan UNA vez por instancia)
 function buildClient() {
+  log('🔧 Creando nuevo cliente WhatsApp...');
   const c = new Client({
     authStrategy: new LocalAuth({ dataPath: SESSION_DIR }),
     // webVersion: '2.2412.54', // <- activar solo si necesitas “clavar” versión Web temporalmente
@@ -137,6 +138,12 @@ function buildClient() {
     lastQRDataURL = null; // no más QR tras conectar
     const s = await c.getState().catch(() => 'NO_STATE');
     log('✅ BOT IS READY | state =', s);
+    log('🎯 Listener de mensajes registrado y activo');
+    log('📬 El bot está listo para recibir mensajes');
+    
+    // Verificar que el listener esté activo
+    const listeners = c.listenerCount('message');
+    log('🔍 Número de listeners de "message" registrados:', listeners);
   });
 
   c.on('change_state', (s) => {
@@ -181,6 +188,8 @@ function buildClient() {
   });
 
   // Mensajes (tus respuestas)
+  log('📝 Registrando listener de mensajes...');
+  log('🔔 Listener "message" será activado cuando el cliente esté ready');
   c.on('message', async (msg) => {
     try {
       log('📨 Mensaje recibido - from:', msg.from, 'body:', (msg.body || '').substring(0, 50));
@@ -214,10 +223,12 @@ function buildClient() {
       
       log('✅ Procesando mensaje - texto:', texto, 'teléfono:', telefono);
 
-    if (usuario?.estado === 'esperando_nombre') {
-      usuario.nombre = (msg.body || '').trim();
-      usuario.estado = 'completado';
-      await msg.reply(`✅ ¡Gracias ${usuario.nombre}! Estás participando del sorteo con el número ${usuario.telefono}. ¡Mucha suerte! 🎉`);
+      if (usuario?.estado === 'esperando_nombre') {
+        log('📝 Usuario en sorteo, guardando nombre...');
+        usuario.nombre = (msg.body || '').trim();
+        usuario.estado = 'completado';
+        log('💬 Enviando respuesta de confirmación de sorteo...');
+        await msg.reply(`✅ ¡Gracias ${usuario.nombre}! Estás participando del sorteo con el número ${usuario.telefono}. ¡Mucha suerte! 🎉`);
 
       try {
         const resp = await fetch('https://script.google.com/macros/s/AKfycbxkk6uC3K6mN6dbRWzviSLYViqN8ML3Vq0L_pQ5jm46eSfThviuaiOp7UGcEZx-mBLKPw/exec', {
@@ -238,36 +249,48 @@ function buildClient() {
       return;
     }
 
-    switch (texto) {
-      case '1':
-        await msg.reply(`🍽️ Ambas cartas: https://www.laprincesa.cl/carta`);
-        break;
-      case '2':
-        await msg.reply(`⏰ Horarios:
+      switch (texto) {
+        case '1':
+          log('💬 Respondiendo: opción 1 (carta)');
+          await msg.reply(`🍽️ Ambas cartas: https://www.laprincesa.cl/carta`);
+          log('✅ Respuesta enviada');
+          break;
+        case '2':
+          log('💬 Respondiendo: opción 2 (horarios)');
+          await msg.reply(`⏰ Horarios:
 - Lunes a sábados: 12:00 a 23:00
 - Domingos: 12:00 a 20:00`);
-        break;
-      case '3':
-        await msg.reply(`📅 Para hacer una reserva: https://tinyurl.com/uaxzmbr6`);
-        break;
-      case '4':
-        await msg.reply(`📍 Paseo Colina Sur 14500, local 102 y 106. https://maps.app.goo.gl/rECKibRJ2Sz6RgfZA`);
-        break;
-      case '86':
-        inscripcionesSorteo.set(msg.from, { estado: 'esperando_nombre', telefono });
-        await msg.reply(`🎁 ¡Estás participando del sorteo!
+          log('✅ Respuesta enviada');
+          break;
+        case '3':
+          log('💬 Respondiendo: opción 3 (reserva)');
+          await msg.reply(`📅 Para hacer una reserva: https://tinyurl.com/uaxzmbr6`);
+          log('✅ Respuesta enviada');
+          break;
+        case '4':
+          log('💬 Respondiendo: opción 4 (ubicación)');
+          await msg.reply(`📍 Paseo Colina Sur 14500, local 102 y 106. https://maps.app.goo.gl/rECKibRJ2Sz6RgfZA`);
+          log('✅ Respuesta enviada');
+          break;
+        case '86':
+          log('💬 Respondiendo: opción 86 (sorteo)');
+          inscripcionesSorteo.set(msg.from, { estado: 'esperando_nombre', telefono });
+          await msg.reply(`🎁 ¡Estás participando del sorteo!
 
 Por favor respondé este mensaje con tu nombre completo para finalizar tu inscripción.
 
 ✅ Hemos registrado tu número: ${telefono}`);
-        break;
-      default:
-        await msg.reply(`👋 ¡Hola! Soy Alma, bot de La Princesa y Ramona. ¿Qué quieres hacer?
+          log('✅ Respuesta enviada');
+          break;
+        default:
+          log('💬 Respondiendo: mensaje por defecto (menú inicial)');
+          await msg.reply(`👋 ¡Hola! Soy Alma, bot de La Princesa y Ramona. ¿Qué quieres hacer?
 1️⃣ Ver la carta  
 2️⃣ Consultar horarios  
 3️⃣ Hacer una reserva  
 4️⃣ Conocer nuestra ubicación`);
-    }
+          log('✅ Respuesta enviada');
+      }
     } catch (error) {
       log('❌ Error procesando mensaje:', error?.message || error, error?.stack);
     }
@@ -281,14 +304,23 @@ async function ensureInit() {
   if (initInProgress) { log('⏳ init en curso, omito reintento'); return; }
   initInProgress = true;
   try {
-    if (!client) client = buildClient();
+    log('🚀 Iniciando ensureInit()...');
+    if (!client) {
+      log('📦 Cliente no existe, creando nuevo...');
+      client = buildClient();
+    } else {
+      log('♻️ Cliente ya existe, reutilizando...');
+    }
+    log('🔄 Llamando a client.initialize()...');
     await client.initialize();
+    log('✅ client.initialize() completado');
   } catch (e) {
-    log('❌ Error en initialize():', e);
+    log('❌ Error en initialize():', e?.message || e, e?.stack);
     try { await client?.destroy(); } catch {}
     client = null;
   } finally {
     initInProgress = false;
+    log('🏁 ensureInit() finalizado');
   }
 }
 
@@ -300,6 +332,8 @@ setInterval(async () => {
 
 // Arranque
 log('🚀 Bot iniciando en Northflank…');
+log('📦 Versión con logs extendidos - Build 2026-01-02');
+log('📁 SESSION_DIR:', SESSION_DIR);
 ensureInit().catch(() => {});
 
 // --------------------- Servidor HTTP ---------------------
