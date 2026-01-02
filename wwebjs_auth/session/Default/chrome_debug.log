@@ -1,0 +1,7 @@
+[0101/215148.656:INFO:CONSOLE(113)] "Event handler of 'x-storagemutated-1' event must be added on the initial evaluation of worker script.", source: https://static.whatsapp.net/rsrc.php/v4/yH/r/sxej_bq7PGz.js (113)
+[0101/215149.219:INFO:CONSOLE(77)] "ErrorUtils caught an error:
+
+multiple-uim-roots
+
+Subsequent non-fatal errors won't be logged; see https://fburl.com/debugjs. [object Object]", source: https://static.whatsapp.net/rsrc.php/v4/yP/r/UnXae5I7-4r.js (77)
+[0101/215150.043:INFO:CONSOLE(113)] "Event handler of 'x-storagemutated-1' event must be added on the initial evaluation of worker script.", source: https://static.whatsapp.net/rsrc.php/v4/yH/r/sxej_bq7PGz.js (113)

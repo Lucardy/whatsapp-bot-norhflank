@@ -22,8 +22,9 @@ const PID = process.pid;
 const log = (...args) => console.log(`[pid ${PID}]`, ...args);
 
 // ---- Lock EXCLUSIVO por archivo: si ya hay otro proceso, este sale.
-const SESSION_DIR = '/wwebjs_auth';
-const LOCK_PATH = `${SESSION_DIR}/.session.lock`;
+// SESSION_DIR: en producción (Northflank) usa /wwebjs_auth, localmente usa ./wwebjs_auth
+const SESSION_DIR = process.env.SESSION_DIR || path.join(__dirname, 'wwebjs_auth');
+const LOCK_PATH = path.join(SESSION_DIR, '.session.lock');
 let lockFd = null;
 function acquireExclusiveLock() {
   const STALE_MS = 2 * 60 * 1000; // 2 min: si el lock es más viejo, se considera huérfano
@@ -81,7 +82,6 @@ function acquireExclusiveLock() {
 acquireExclusiveLock();
 
 // ---- Estado app/bot
-const inscripcionesSorteo = new Map();
 const __cooldown = new Map();
 let lastQRDataURL = null;
 let client = null;
@@ -141,9 +141,10 @@ function buildClient() {
     log('🎯 Listener de mensajes registrado y activo');
     log('📬 El bot está listo para recibir mensajes');
     
-    // Verificar que el listener esté activo
-    const listeners = c.listenerCount('message');
-    log('🔍 Número de listeners de "message" registrados:', listeners);
+    // Verificar que los listeners estén activos
+    const listeners_create = c.listenerCount('message_create');
+    const listeners_message = c.listenerCount('message');
+    log('🔍 Listeners registrados - message_create:', listeners_create, 'message:', listeners_message);
   });
 
   c.on('change_state', (s) => {
@@ -189,11 +190,19 @@ function buildClient() {
 
   // Mensajes (tus respuestas)
   log('📝 Registrando listener de mensajes...');
-  log('🔔 Listener "message" será activado cuando el cliente esté ready');
-  c.on('message', async (msg) => {
+  log('🔔 Listener "message_create" será activado cuando el cliente esté ready');
+  
+  // Función para procesar mensajes
+  const handleMessage = async (msg) => {
+    const msgId = msg.id?._serialized || msg.id || 'unknown';
+    log('📨 ========== MENSAJE RECIBIDO ==========');
+    log('📨 ID:', msgId);
+    log('📨 From:', msg.from);
+    log('📨 Body:', (msg.body || '').substring(0, 100));
+    log('📨 FromMe:', msg.fromMe);
+    log('📨 IsGroup:', msg.from?.endsWith('@g.us'));
+    
     try {
-      log('📨 Mensaje recibido - from:', msg.from, 'body:', (msg.body || '').substring(0, 50));
-      
       if (msg.fromMe) {
         log('⏭️ Ignorado: mensaje propio');
         return;
@@ -211,90 +220,138 @@ function buildClient() {
         const now = Date.now();
         const last = __cooldown.get(msg.from) || 0;
         if (now - last < 1500) {
-          log('⏭️ Ignorado: cooldown activo');
+          log('⏭️ Ignorado: cooldown activo (último:', last, 'ahora:', now, 'diff:', now - last);
           return;
         }
         __cooldown.set(msg.from, now);
-      } catch {}
+        log('✅ Cooldown actualizado');
+      } catch (err) {
+        log('⚠️ Error en cooldown:', err?.message || err);
+      }
 
       const texto = (msg.body || '').trim().toLowerCase();
       const telefono = (msg.from || '').split('@')[0] || '';
-      const usuario = inscripcionesSorteo.get(msg.from);
       
       log('✅ Procesando mensaje - texto:', texto, 'teléfono:', telefono);
 
-      if (usuario?.estado === 'esperando_nombre') {
-        log('📝 Usuario en sorteo, guardando nombre...');
-        usuario.nombre = (msg.body || '').trim();
-        usuario.estado = 'completado';
-        log('💬 Enviando respuesta de confirmación de sorteo...');
-        await msg.reply(`✅ ¡Gracias ${usuario.nombre}! Estás participando del sorteo con el número ${usuario.telefono}. ¡Mucha suerte! 🎉`);
-
-      try {
-        const resp = await fetch('https://script.google.com/macros/s/AKfycbxkk6uC3K6mN6dbRWzviSLYViqN8ML3Vq0L_pQ5jm46eSfThviuaiOp7UGcEZx-mBLKPw/exec', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nombre: usuario.nombre, telefono: usuario.telefono }),
-        });
-        log('✅ Respuesta de Google Sheets:', await resp.text());
-      } catch (error) {
-        log('❌ Error al enviar datos a Google Sheets:', error);
-      }
-
-      await msg.reply(`👋 ¿Qué quieres hacer ahora?
-1️⃣ Ver la carta  
-2️⃣ Consultar horarios  
-3️⃣ Hacer una reserva  
-4️⃣ Conocer nuestra ubicación`);
-      return;
-    }
-
       switch (texto) {
         case '1':
-          log('💬 Respondiendo: opción 1 (carta)');
-          await msg.reply(`🍽️ Ambas cartas: https://www.laprincesa.cl/carta`);
-          log('✅ Respuesta enviada');
+          log('💬 Respondiendo: opción 1 (precios)');
+          try {
+            const result = await msg.reply(`💰 *Nuestros Planes de Páginas Web*
+
+Ofrecemos planes mensuales que incluyen:
+• Diseño profesional
+• Hosting y dominio
+• Mantenimiento continuo
+• Soporte técnico
+
+📋 *Planes disponibles:*
+
+• *Landing Page*: $24.000/mes
+• *Catálogo Online*: $41.000/mes
+• *Business Web*: $58.000/mes
+
+💬 Para más detalles o consultas personalizadas, elige la opción 4 para hablar con un agente.`);
+            log('✅ Respuesta enviada exitosamente. ID:', result?.id?._serialized || result?.id);
+          } catch (replyError) {
+            log('❌ Error al enviar respuesta (opción 1):', replyError?.message || replyError, replyError?.stack);
+          }
           break;
         case '2':
-          log('💬 Respondiendo: opción 2 (horarios)');
-          await msg.reply(`⏰ Horarios:
-- Lunes a sábados: 12:00 a 23:00
-- Domingos: 12:00 a 20:00`);
-          log('✅ Respuesta enviada');
+          log('💬 Respondiendo: opción 2 (trabajos)');
+          try {
+            const result = await msg.reply(`🎨 *Nuestros Trabajos*
+
+Creamos páginas web profesionales y modernas para tu negocio. Nuestros servicios incluyen:
+
+✨ *Lo que ofrecemos:*
+• Diseño responsive (se adapta a móviles)
+• Optimización para buscadores (SEO)
+• Integración con redes sociales
+• Formularios de contacto
+• Panel de administración
+• Actualizaciones de contenido
+
+🚀 *Tecnologías que utilizamos:*
+• Diseño moderno y profesional
+• Velocidad optimizada
+• Seguridad implementada
+
+💡 Todos nuestros sitios incluyen mantenimiento continuo y soporte técnico.`);
+            log('✅ Respuesta enviada exitosamente. ID:', result?.id?._serialized || result?.id);
+          } catch (replyError) {
+            log('❌ Error al enviar respuesta (opción 2):', replyError?.message || replyError, replyError?.stack);
+          }
           break;
         case '3':
-          log('💬 Respondiendo: opción 3 (reserva)');
-          await msg.reply(`📅 Para hacer una reserva: https://tinyurl.com/uaxzmbr6`);
-          log('✅ Respuesta enviada');
+          log('💬 Respondiendo: opción 3 (página web)');
+          try {
+            const result = await msg.reply(`🌐 *Nuestra Página Web*
+
+Visita nuestro sitio para conocer más sobre nuestros servicios:
+
+🔗 https://unikuoweb.com/
+
+Allí encontrarás:
+• Portafolio de trabajos
+• Información detallada de servicios
+• Casos de éxito
+• Formulario de contacto
+
+💬 ¿Tienes alguna pregunta? Elige la opción 4 para hablar con un agente.`);
+            log('✅ Respuesta enviada exitosamente. ID:', result?.id?._serialized || result?.id);
+          } catch (replyError) {
+            log('❌ Error al enviar respuesta (opción 3):', replyError?.message || replyError, replyError?.stack);
+          }
           break;
         case '4':
-          log('💬 Respondiendo: opción 4 (ubicación)');
-          await msg.reply(`📍 Paseo Colina Sur 14500, local 102 y 106. https://maps.app.goo.gl/rECKibRJ2Sz6RgfZA`);
-          log('✅ Respuesta enviada');
-          break;
-        case '86':
-          log('💬 Respondiendo: opción 86 (sorteo)');
-          inscripcionesSorteo.set(msg.from, { estado: 'esperando_nombre', telefono });
-          await msg.reply(`🎁 ¡Estás participando del sorteo!
+          log('💬 Respondiendo: opción 4 (agente)');
+          try {
+            const result = await msg.reply(`👤 *Hablar con un Agente*
 
-Por favor respondé este mensaje con tu nombre completo para finalizar tu inscripción.
+¡Perfecto! Un agente de Unikuo se comunicará contigo en la brevedad.
 
-✅ Hemos registrado tu número: ${telefono}`);
-          log('✅ Respuesta enviada');
+⏰ Te responderemos pronto por este mismo WhatsApp.
+
+Mientras tanto, puedes revisar nuestras opciones anteriores si tienes alguna otra consulta.`);
+            log('✅ Respuesta enviada exitosamente. ID:', result?.id?._serialized || result?.id);
+          } catch (replyError) {
+            log('❌ Error al enviar respuesta (opción 4):', replyError?.message || replyError, replyError?.stack);
+          }
           break;
         default:
           log('💬 Respondiendo: mensaje por defecto (menú inicial)');
-          await msg.reply(`👋 ¡Hola! Soy Alma, bot de La Princesa y Ramona. ¿Qué quieres hacer?
-1️⃣ Ver la carta  
-2️⃣ Consultar horarios  
-3️⃣ Hacer una reserva  
-4️⃣ Conocer nuestra ubicación`);
-          log('✅ Respuesta enviada');
+          try {
+            const result = await msg.reply(`👋 ¡Hola! 👋
+
+Bienvenido a *Unikuo*, servicio de creación de páginas web. Estoy aquí para ayudarte.
+
+¿Qué te gustaría saber?
+
+1️⃣ Consultar precios
+2️⃣ Información de nuestros trabajos
+3️⃣ Ver nuestra página web
+4️⃣ Hablar con un agente personal
+
+Escribe el número de la opción que te interesa.`);
+            log('✅ Respuesta enviada exitosamente. ID:', result?.id?._serialized || result?.id);
+          } catch (replyError) {
+            log('❌ Error al enviar respuesta (default):', replyError?.message || replyError, replyError?.stack);
+          }
       }
+      log('📨 ========== FIN PROCESAMIENTO MENSAJE ==========');
     } catch (error) {
-      log('❌ Error procesando mensaje:', error?.message || error, error?.stack);
+      log('❌ Error procesando mensaje:', error?.message || error);
+      log('❌ Stack:', error?.stack);
+      log('📨 ========== ERROR EN MENSAJE ==========');
     }
-  });
+  };
+  
+  // Registrar en ambos eventos para mayor compatibilidad
+  c.on('message_create', handleMessage);
+  c.on('message', handleMessage);
+  log('✅ Listeners registrados en "message" y "message_create"');
 
   return c;
 }
