@@ -1,3 +1,24 @@
 node_modules
+
+# Archivos temporales y cache (no necesarios en producción)
+sessions/**/.wwebjs_cache/
+sessions/**/Default/
+sessions/**/Cache/
+sessions/**/Code Cache/
+sessions/**/GPUCache/
+sessions/**/Service Worker/
+sessions/**/IndexedDB/
+sessions/**/blob_storage/
+sessions/**/Session Storage/
+
+# QRs generados (opcionales, se regeneran)
+*.png
+qr_*.png
+
+# Carpetas antiguas (si las hay)
+wwebjs_auth/
 .session
 .wwebjs_auth
+
+# NOTA: Las carpetas de sesiones (sessions/cliente_1/, etc.) SÍ se suben a GitHub
+# porque se necesitan en producción para mantener las sesiones activas

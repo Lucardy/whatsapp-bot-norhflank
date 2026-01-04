@@ -1,0 +1,3 @@
+# Este archivo asegura que la carpeta sessions/ se suba a GitHub
+# Las sesiones de WhatsApp se guardan aquí y son necesarias en producción
+
