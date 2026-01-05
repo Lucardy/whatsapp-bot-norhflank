@@ -20,5 +20,8 @@ wwebjs_auth/
 .session
 .wwebjs_auth
 
+# Legacy - archivos antiguos (se mantienen para referencia pero no se ejecutan)
+# legacy/ se puede subir a GitHub para referencia histórica
+
 # NOTA: Las carpetas de sesiones (sessions/cliente_1/, etc.) SÍ se suben a GitHub
 # porque se necesitan en producción para mantener las sesiones activas

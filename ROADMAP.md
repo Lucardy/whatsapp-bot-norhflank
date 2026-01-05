@@ -1040,21 +1040,43 @@ export default {
 
 ## ✅ Checklist General de Progreso
 
-### Fase Actual: Preparación
-- [ ] Base de datos diseñada
-- [ ] Migraciones creadas
-- [ ] Estructura de carpetas definida
-- [ ] Variables de entorno configuradas
+### Fase Actual: Configuración por Cliente (ETAPA 4)
+- [x] Base de datos diseñada ✅
+- [x] Migraciones creadas ✅
+- [x] Estructura de carpetas definida ✅
+- [x] Variables de entorno configuradas ✅
+- [x] SessionManager creado ✅
+- [x] Sistema multi-sesión funcionando ✅
+- [x] Configuración desde base de datos ✅
+- [x] Configuración desde WhatsApp (NUEVO) ✅
+- [ ] Validaciones de configuración
+- [ ] Edición parcial de opciones
+- [ ] Vista previa de menú
 
 ### Próximos Pasos
-1. Implementar modelo de datos
-2. Crear SessionManager
-3. Migrar código actual
-4. Testing básico
-5. Primer cliente de prueba
+1. ✅ Implementar modelo de datos - COMPLETADO
+2. ✅ Crear SessionManager - COMPLETADO
+3. ✅ Migrar código actual - COMPLETADO
+4. 🟡 Completar sistema de configuración - EN PROGRESO
+5. ⏸️ Testing básico - PENDIENTE
+6. ⏸️ Panel de onboarding - PENDIENTE
+
+### Estado por Etapa
+- ✅ ETAPA 1 - Preparación: 100%
+- ✅ ETAPA 2 - Modelo de Datos: 100%
+- ✅ ETAPA 3 - Multi-Sesión: 100%
+- 🟡 ETAPA 4 - Configuración: 80%
+- ⏸️ ETAPA 5 - Onboarding: 0%
+- ⏸️ ETAPA 6 - Paneles: 0%
+- ⏸️ ETAPA 7 - Planes/Pagos: 0%
+- 🟡 ETAPA 8 - Seguridad: 40%
+- ⏸️ ETAPA 9 - Testing: 0%
+- 🟡 ETAPA 10 - Escalado: 30%
+
+**Progreso General**: ~60%
 
 ---
 
-**Última actualización**: 2026-01-02
-**Versión del roadmap**: 1.0
+**Última actualización**: 2026-01-XX
+**Versión del roadmap**: 1.1
 

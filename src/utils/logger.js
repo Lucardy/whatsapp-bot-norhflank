@@ -1,11 +1,13 @@
-// Utilidad de logging con formato consistente
-const PID = process.pid;
-
-export const log = (...args) => {
-  console.log(`[pid ${PID}]`, ...args);
-};
-
-export const logSession = (sessionId, ...args) => {
-  console.log(`[pid ${PID}] [${sessionId}]`, ...args);
-};
+// Re-exportar desde el nuevo sistema de logging (compatibilidad hacia atrás)
+export {
+  log,
+  logSession,
+  debug,
+  warn,
+  error,
+  debugSession,
+  warnSession,
+  errorSession,
+  LogLevel
+} from './logger/index.js';
 

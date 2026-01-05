@@ -1,0 +1,785 @@
+// Menú interactivo para gestionar sesiones de WhatsApp
+import inquirer from 'inquirer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { getPrisma } from '../config/database.js';
+import { config } from '../config/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '../..');
+
+const CONFIG_FILE = path.join(PROJECT_ROOT, 'sessions-config.json');
+const SESSION_BASE_DIR = config.sessionBaseDir;
+const PORT = config.port;
+
+// Verificar si una sesión existe físicamente
+function sessionExists(sessionId) {
+  const sessionPath = path.join(SESSION_BASE_DIR, sessionId);
+  return fs.existsSync(sessionPath);
+}
+
+// Cargar sesiones desde DB o archivo
+async function loadSessions() {
+  // Intentar desde DB primero
+  try {
+    const db = getPrisma();
+    const sessions = await db.whatsAppSession.findMany({
+      where: {
+        client: {
+          status: {
+            in: ['active', 'trial']
+          }
+        }
+      },
+      select: {
+        session_name: true
+      }
+    });
+    
+    if (sessions.length > 0) {
+      return sessions.map(s => s.session_name);
+    }
+  } catch (err) {
+    // Si no hay DB, usar archivo
+  }
+  
+  // Fallback a archivo
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const data = fs.readFileSync(CONFIG_FILE, 'utf8');
+      const config = JSON.parse(data);
+      return config.sessions || [];
+    }
+  } catch (err) {
+    // Ignorar errores
+  }
+  
+  return [];
+}
+
+// Guardar sesiones (solo en archivo por ahora, DB se actualiza desde otro lugar)
+function saveSessionsToFile(sessions) {
+  try {
+    const config = { sessions };
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2));
+    return true;
+  } catch (err) {
+    console.error('❌ Error guardando configuración:', err.message);
+    return false;
+  }
+}
+
+// Agregar nueva sesión
+async function addSession(sessionManager = null) {
+  console.log('\n➕ Agregar Nueva Sesión / Cliente\n');
+
+  const currentSessions = await loadSessions();
+
+  const { sessionName } = await inquirer.prompt([
+    {
+      type: 'input',
+      name: 'sessionName',
+      message: 'Ingresa el nombre del cliente (sin espacios, solo letras, números y guiones):',
+      validate: (input) => {
+        if (!input || input.trim().length === 0) {
+          return 'El nombre no puede estar vacío';
+        }
+        if (!/^[a-zA-Z0-9_-]+$/.test(input)) {
+          return 'El nombre solo puede contener letras, números, guiones y guiones bajos';
+        }
+        if (currentSessions.includes(input)) {
+          return 'Ya existe un cliente con ese nombre';
+        }
+        return true;
+      }
+    }
+  ]);
+
+  console.log(`\n🔄 Creando sesión para "${sessionName}"...`);
+
+  // Si el bot está corriendo (sessionManager disponible), crear la sesión dinámicamente
+  if (sessionManager) {
+    try {
+      await sessionManager.createSession(sessionName);
+      console.log(`✅ Sesión "${sessionName}" creada y en proceso de inicialización`);
+    } catch (err) {
+      console.log(`⚠️ Error creando sesión: ${err?.message || err}`);
+    }
+  }
+
+  // Guardar en configuración
+  const sessions = [...currentSessions, sessionName];
+  const { saveSessionsConfig } = await import('../config/index.js');
+  await saveSessionsConfig(sessions);
+  saveSessionsToFile(sessions);
+
+  console.log(`\n✅ Cliente "${sessionName}" agregado exitosamente!`);
+  
+  // Crear carpeta de sesión si no existe
+  const sessionPath = path.join(SESSION_BASE_DIR, sessionName);
+  if (!fs.existsSync(sessionPath)) {
+    fs.mkdirSync(sessionPath, { recursive: true });
+    console.log(`📁 Carpeta creada: ${sessionPath}`);
+  }
+
+  // Mostrar link del QR
+  const qrLink = `http://localhost:${PORT}/qr/${sessionName}`;
+  console.log(`\n📱 Próximos pasos:`);
+  console.log(`1. Abre en tu navegador: ${qrLink}`);
+  console.log(`2. Escanea el QR con el WhatsApp del cliente`);
+  console.log(`3. La sesión se guardará automáticamente\n`);
+  
+  if (sessionManager) {
+    console.log(`💡 La sesión se está inicializando ahora. El QR estará disponible en unos segundos.\n`);
+  } else {
+    console.log(`💡 El bot iniciará automáticamente después de gestionar sesiones.\n`);
+  }
+}
+
+// Eliminar sesión
+async function removeSession(sessionManager = null) {
+  const sessions = await loadSessions();
+
+  if (sessions.length === 0) {
+    console.log('\n⚠️ No hay clientes configurados para eliminar.\n');
+    return;
+  }
+
+  console.log('\n➖ Eliminar Cliente\n');
+
+  const { sessionToRemove } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'sessionToRemove',
+      message: 'Selecciona la sesión a eliminar:',
+      choices: sessions.map(s => ({
+        name: `${s} ${sessionExists(s) ? '(existe físicamente)' : '(no existe)'}`,
+        value: s
+      }))
+    }
+  ]);
+
+  const { confirm } = await inquirer.prompt([
+    {
+      type: 'confirm',
+      name: 'confirm',
+      message: `¿Estás seguro de eliminar la sesión "${sessionToRemove}"?`,
+      default: false
+    }
+  ]);
+
+  if (confirm) {
+    console.log(`\n🔄 Eliminando cliente "${sessionToRemove}"...`);
+    
+    // Si el bot está corriendo, eliminar dinámicamente
+    if (sessionManager) {
+      try {
+        const { deleteAuth } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'deleteAuth',
+            message: '¿Eliminar también la autenticación guardada? (recomendado si no vas a reutilizar este cliente)',
+            default: true
+          }
+        ]);
+        
+        await sessionManager.destroySession(sessionToRemove, deleteAuth);
+        console.log(`✅ Sesión "${sessionToRemove}" eliminada del bot`);
+      } catch (err) {
+        console.log(`⚠️ Error eliminando sesión: ${err?.message || err}`);
+      }
+    }
+    
+    // Eliminar de la configuración
+    const newSessions = sessions.filter(s => s !== sessionToRemove);
+    const { saveSessionsConfig } = await import('../config/index.js');
+    await saveSessionsConfig(newSessions);
+    saveSessionsToFile(newSessions);
+    console.log(`✅ Cliente "${sessionToRemove}" eliminado de la configuración`);
+    
+    // Preguntar si quiere eliminar también la carpeta física
+    const sessionPath = path.join(SESSION_BASE_DIR, sessionToRemove);
+    if (sessionExists(sessionToRemove)) {
+      const { deleteFolder } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'deleteFolder',
+          message: `¿Eliminar también la carpeta física? (${sessionPath})`,
+          default: false
+        }
+      ]);
+
+      if (deleteFolder) {
+        try {
+          fs.rmSync(sessionPath, { recursive: true, force: true });
+          console.log(`✅ Carpeta eliminada: ${sessionPath}`);
+        } catch (err) {
+          console.log(`⚠️ Error eliminando carpeta: ${err.message}`);
+        }
+      }
+    }
+    
+    console.log(`\n✅ Cliente "${sessionToRemove}" eliminado exitosamente\n`);
+  } else {
+    console.log('\n❌ Operación cancelada');
+  }
+}
+
+// Listar sesiones
+async function listSessions() {
+  const sessions = await loadSessions();
+
+  console.log('\n📋 Sesiones Configuradas\n');
+
+  if (sessions.length === 0) {
+    console.log('   ⚠️ No hay sesiones configuradas.\n');
+    return;
+  }
+
+  sessions.forEach((session, index) => {
+    const exists = sessionExists(session);
+    const status = exists ? '✅' : '⚠️';
+    console.log(`   ${index + 1}. ${status} ${session} ${exists ? '(existe)' : '(no existe físicamente)'}`);
+  });
+
+  console.log('');
+}
+
+// Mostrar links de QR
+async function showQRLinks() {
+  const sessions = await loadSessions();
+
+  console.log('\n🔗 Links de QR para Escanear\n');
+
+  if (sessions.length === 0) {
+    console.log('   ⚠️ No hay sesiones configuradas.\n');
+    return;
+  }
+
+  sessions.forEach((session, index) => {
+    const qrLink = `http://localhost:${PORT}/qr/${session}`;
+    console.log(`   ${index + 1}. ${session}:`);
+    console.log(`      ${qrLink}`);
+  });
+
+  console.log('\n💡 El bot debe estar corriendo para que estos links funcionen.\n');
+}
+
+// Regenerar QR / Reconectar sesión
+async function regenerateQR() {
+  const sessions = await loadSessions();
+
+  if (sessions.length === 0) {
+    console.log('\n⚠️ No hay sesiones configuradas.\n');
+    return;
+  }
+
+  console.log('\n🔄 Regenerar QR / Reconectar Sesión\n');
+
+  const { sessionToReconnect } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'sessionToReconnect',
+      message: 'Selecciona la sesión para regenerar el QR:',
+      choices: sessions.map(s => ({
+        name: `${s} ${sessionExists(s) ? '(existe físicamente)' : '(no existe)'}`,
+        value: s
+      }))
+    }
+  ]);
+
+  // Verificar estado en DB si existe
+  let sessionData = null;
+  try {
+    const db = getPrisma();
+    sessionData = await db.whatsAppSession.findUnique({
+      where: { session_name: sessionToReconnect },
+      include: {
+        client: true
+      }
+    });
+  } catch (err) {
+    // Ignorar si no hay DB
+  }
+
+  console.log(`\n📱 Sesión: ${sessionToReconnect}`);
+  if (sessionData) {
+    console.log(`   Estado actual: ${sessionData.status}`);
+    console.log(`   Cliente: ${sessionData.client.name}`);
+  }
+  console.log('');
+
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: '¿Qué quieres hacer?',
+      choices: [
+        { name: '🔄 Resetear sesión (eliminar autenticación y forzar nuevo QR)', value: 'reset' },
+        { name: '📋 Ver link del QR (si el bot está corriendo)', value: 'view' },
+        { name: 'ℹ️  Ver instrucciones', value: 'instructions' },
+        { name: '❌ Cancelar', value: 'cancel' }
+      ]
+    }
+  ]);
+
+  if (action === 'cancel') {
+    return;
+  }
+
+  if (action === 'view') {
+    const qrLink = `http://localhost:${PORT}/qr/${sessionToReconnect}`;
+    console.log(`\n🔗 Link del QR:`);
+    console.log(`   ${qrLink}\n`);
+    console.log('💡 Abre este link en tu navegador cuando el bot esté corriendo.');
+    console.log('💡 Si el bot no está corriendo, inícialo con "npm start" primero.\n');
+    return;
+  }
+
+  if (action === 'instructions') {
+    console.log('\n📖 Instrucciones para escanear QR:\n');
+    console.log('1. Inicia el bot con: npm start');
+    console.log('2. Elige "Iniciar bot directamente" o "Gestionar sesiones y luego iniciar bot"');
+    console.log('3. Cuando el bot esté corriendo, abre en tu navegador:');
+    console.log(`   http://localhost:${PORT}/qr/${sessionToReconnect}`);
+    console.log('4. Escanea el QR con WhatsApp en tu celular');
+    console.log('5. Después de escanear, la sesión quedará guardada automáticamente');
+    console.log('6. No necesitarás escanear el QR nuevamente en el futuro\n');
+    return;
+  }
+
+  if (action === 'reset') {
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: `¿Estás seguro de resetear la sesión "${sessionToReconnect}"? Esto eliminará la autenticación guardada y necesitarás escanear el QR nuevamente.`,
+        default: false
+      }
+    ]);
+
+    if (!confirm) {
+      console.log('\n❌ Operación cancelada');
+      return;
+    }
+
+    // Eliminar carpeta .wwebjs_auth para forzar nuevo QR
+    const sessionPath = path.join(SESSION_BASE_DIR, sessionToReconnect);
+    const authPath = path.join(sessionPath, '.wwebjs_auth');
+    
+    console.log('\n🔄 Eliminando autenticación guardada...');
+
+    if (fs.existsSync(authPath)) {
+      try {
+        fs.rmSync(authPath, { recursive: true, force: true });
+        console.log(`\n✅ Autenticación eliminada: ${authPath}`);
+        console.log('💡 La próxima vez que inicies el bot, se generará un nuevo QR para esta sesión.');
+      } catch (err) {
+        console.log(`\n⚠️ Error al eliminar autenticación: ${err.message}`);
+        console.log(`💡 Puedes eliminarla manualmente: ${authPath}`);
+      }
+    } else {
+      console.log(`\n⚠️ No se encontró autenticación guardada en: ${authPath}`);
+      console.log('💡 La sesión ya está lista para generar un nuevo QR.');
+    }
+
+    // Actualizar estado en DB si existe
+    if (sessionData) {
+      try {
+        const db = getPrisma();
+        await db.whatsAppSession.update({
+          where: { session_name: sessionToReconnect },
+          data: { 
+            status: 'qr_pending',
+            phone_number: null
+          }
+        });
+        console.log('✅ Estado actualizado en la base de datos: qr_pending');
+      } catch (err) {
+        console.log('⚠️ No se pudo actualizar el estado en la base de datos');
+      }
+    }
+
+    console.log('\n📋 Próximos pasos:');
+    console.log('1. Elige "✅ Continuar e iniciar bot" en el menú');
+    console.log('2. El bot iniciará automáticamente y generará el QR');
+    console.log('3. Abre en tu navegador:');
+    console.log(`   http://localhost:${PORT}/qr/${sessionToReconnect}`);
+    console.log('4. Escanea el QR con WhatsApp\n');
+  }
+}
+
+// Actualizar sesión existente
+async function updateSession() {
+  const sessions = await loadSessions();
+
+  if (sessions.length === 0) {
+    console.log('\n⚠️ No hay sesiones configuradas para actualizar.\n');
+    return;
+  }
+
+  console.log('\n✏️  Actualizar Sesión\n');
+
+  const { sessionToUpdate } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'sessionToUpdate',
+      message: 'Selecciona la sesión a actualizar:',
+      choices: sessions.map(s => ({
+        name: `${s} ${sessionExists(s) ? '(existe físicamente)' : '(no existe)'}`,
+        value: s
+      }))
+    }
+  ]);
+
+  // Cargar información actual de la sesión desde DB si existe
+  let currentSessionData = null;
+  let availableClients = [];
+  
+  try {
+    const db = getPrisma();
+    currentSessionData = await db.whatsAppSession.findUnique({
+      where: { session_name: sessionToUpdate },
+      include: {
+        client: {
+          include: {
+            plan: true
+          }
+        }
+      }
+    });
+
+    // Cargar lista de clientes disponibles
+    availableClients = await db.client.findMany({
+      where: {
+        status: {
+          in: ['active', 'trial']
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        status: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+  } catch (err) {
+    // Si no hay DB, continuar sin datos de DB
+  }
+
+  console.log(`\n📋 Información actual de la sesión "${sessionToUpdate}":`);
+  if (currentSessionData) {
+    console.log(`   Cliente: ${currentSessionData.client.name} (ID: ${currentSessionData.client_id})`);
+    console.log(`   Estado: ${currentSessionData.status}`);
+    console.log(`   Teléfono: ${currentSessionData.phone_number || 'No configurado'}`);
+  } else {
+    console.log('   (No hay información en la base de datos)');
+  }
+  console.log('');
+
+  // Opciones de actualización
+  const { updateField } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'updateField',
+      message: '¿Qué quieres actualizar?',
+      choices: [
+        { name: '📝 Renombrar sesión (cambiar nombre)', value: 'rename' },
+        { name: '👤 Cambiar cliente asociado', value: 'client' },
+        { name: '📱 Actualizar número de teléfono', value: 'phone' },
+        { name: '🔄 Actualizar estado', value: 'status' },
+        { name: '❌ Cancelar', value: 'cancel' }
+      ]
+    }
+  ]);
+
+  if (updateField === 'cancel') {
+    console.log('\n❌ Operación cancelada');
+    return;
+  }
+
+  try {
+    const db = getPrisma();
+
+    switch (updateField) {
+      case 'rename': {
+        const { newName } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'newName',
+            message: 'Ingresa el nuevo nombre de la sesión:',
+            default: sessionToUpdate,
+            validate: (input) => {
+              if (!input || input.trim().length === 0) {
+                return 'El nombre no puede estar vacío';
+              }
+              if (!/^[a-zA-Z0-9_-]+$/.test(input)) {
+                return 'El nombre solo puede contener letras, números, guiones y guiones bajos';
+              }
+              if (input !== sessionToUpdate && sessions.includes(input)) {
+                return 'Ya existe una sesión con ese nombre';
+              }
+              return true;
+            }
+          }
+        ]);
+
+        if (newName !== sessionToUpdate) {
+          // Actualizar en DB si existe
+          if (currentSessionData) {
+            await db.whatsAppSession.update({
+              where: { session_name: sessionToUpdate },
+              data: { session_name: newName }
+            });
+            console.log(`\n✅ Sesión actualizada en la base de datos: "${sessionToUpdate}" → "${newName}"`);
+          }
+
+          // Actualizar en archivo
+          const newSessions = sessions.map(s => s === sessionToUpdate ? newName : s);
+          saveSessionsToFile(newSessions);
+          console.log(`✅ Sesión renombrada en configuración: "${sessionToUpdate}" → "${newName}"`);
+
+          // Renombrar carpeta física si existe
+          const oldPath = path.join(SESSION_BASE_DIR, sessionToUpdate);
+          const newPath = path.join(SESSION_BASE_DIR, newName);
+          if (fs.existsSync(oldPath)) {
+            const { renameFolder } = await inquirer.prompt([
+              {
+                type: 'confirm',
+                name: 'renameFolder',
+                message: `¿Renombrar también la carpeta física? (${oldPath} → ${newPath})`,
+                default: true
+              }
+            ]);
+
+            if (renameFolder) {
+              try {
+                fs.renameSync(oldPath, newPath);
+                console.log(`✅ Carpeta renombrada: ${oldPath} → ${newPath}`);
+              } catch (err) {
+                console.log(`⚠️ Error al renombrar carpeta: ${err.message}`);
+                console.log(`💡 Puedes renombrarla manualmente después`);
+              }
+            }
+          }
+        } else {
+          console.log('\n⚠️ El nombre es el mismo, no se realizaron cambios');
+        }
+        break;
+      }
+
+      case 'client': {
+        if (availableClients.length === 0) {
+          console.log('\n⚠️ No hay clientes disponibles en la base de datos.');
+          console.log('💡 Asegúrate de tener clientes creados en la DB.\n');
+          return;
+        }
+
+        const { clientId } = await inquirer.prompt([
+          {
+            type: 'list',
+            name: 'clientId',
+            message: 'Selecciona el nuevo cliente:',
+            choices: availableClients.map(c => ({
+              name: `${c.name} (${c.status})`,
+              value: c.id
+            }))
+          }
+        ]);
+
+        if (currentSessionData) {
+          await db.whatsAppSession.update({
+            where: { session_name: sessionToUpdate },
+            data: { client_id: clientId }
+          });
+          const selectedClient = availableClients.find(c => c.id === clientId);
+          console.log(`\n✅ Cliente actualizado: "${currentSessionData.client.name}" → "${selectedClient.name}"`);
+        } else {
+          console.log('\n⚠️ Esta sesión no existe en la base de datos.');
+          console.log('💡 Solo las sesiones en la DB pueden tener cliente asociado.\n');
+        }
+        break;
+      }
+
+      case 'phone': {
+        const { phoneNumber } = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'phoneNumber',
+            message: 'Ingresa el número de teléfono (o deja vacío para eliminar):',
+            default: currentSessionData?.phone_number || '',
+            validate: (input) => {
+              if (input && !/^\+?[0-9\s-]+$/.test(input.trim())) {
+                return 'Formato de teléfono inválido';
+              }
+              return true;
+            }
+          }
+        ]);
+
+        if (currentSessionData) {
+          await db.whatsAppSession.update({
+            where: { session_name: sessionToUpdate },
+            data: { phone_number: phoneNumber.trim() || null }
+          });
+          console.log(`\n✅ Número de teléfono actualizado: ${phoneNumber.trim() || '(eliminado)'}`);
+        } else {
+          console.log('\n⚠️ Esta sesión no existe en la base de datos.');
+          console.log('💡 Solo las sesiones en la DB pueden tener número de teléfono.\n');
+        }
+        break;
+      }
+
+      case 'status': {
+        const { status } = await inquirer.prompt([
+          {
+            type: 'list',
+            name: 'status',
+            message: 'Selecciona el nuevo estado:',
+            choices: [
+              { name: 'qr_pending - Esperando escaneo de QR', value: 'qr_pending' },
+              { name: 'connecting - Conectando', value: 'connecting' },
+              { name: 'connected - Conectado', value: 'connected' },
+              { name: 'disconnected - Desconectado', value: 'disconnected' },
+              { name: 'error - Error', value: 'error' }
+            ],
+            default: currentSessionData?.status || 'qr_pending'
+          }
+        ]);
+
+        if (currentSessionData) {
+          await db.whatsAppSession.update({
+            where: { session_name: sessionToUpdate },
+            data: { status }
+          });
+          console.log(`\n✅ Estado actualizado: "${currentSessionData.status}" → "${status}"`);
+        } else {
+          console.log('\n⚠️ Esta sesión no existe en la base de datos.');
+          console.log('💡 Solo las sesiones en la DB pueden tener estado.\n');
+        }
+        break;
+      }
+    }
+  } catch (err) {
+    console.error('\n❌ Error actualizando sesión:', err.message);
+    if (err.code === 'P2002') {
+      console.log('💡 Ya existe una sesión con ese nombre en la base de datos.');
+    }
+  }
+}
+
+// Menú principal de gestión
+export async function showSessionManagementMenu(sessionManager = null, isBotRunning = false) {
+  const sessions = await loadSessions();
+
+  console.log('\n📱 ============================================');
+  console.log('   GESTOR DE CLIENTES / SESIONES');
+  console.log('============================================\n');
+  
+  if (isBotRunning) {
+    console.log('💡 El bot está corriendo. Los cambios se aplicarán inmediatamente.\n');
+  }
+
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: '¿Qué quieres hacer?',
+      choices: [
+        { name: '➕ Agregar nuevo cliente', value: 'add' },
+        { name: '✏️  Actualizar cliente existente', value: 'update' },
+        { name: '🔄 Cambiar WhatsApp de un cliente', value: 'reconnect' },
+        { name: '➖ Eliminar cliente', value: 'remove' },
+        { name: '📋 Ver clientes configurados', value: 'list' },
+        { name: '🔗 Ver links de QR', value: 'qr' },
+        ...(isBotRunning ? [] : [{ name: '✅ Continuar e iniciar bot', value: 'continue' }]),
+        { name: '❌ Salir / Volver', value: 'exit' }
+      ]
+    }
+  ]);
+
+  switch (action) {
+    case 'add':
+      await addSession(sessionManager);
+      await showSessionManagementMenu(sessionManager, isBotRunning);
+      break;
+    case 'update':
+      await updateSession();
+      await showSessionManagementMenu(sessionManager, isBotRunning);
+      break;
+    case 'reconnect':
+      await regenerateQR(sessionManager);
+      await showSessionManagementMenu(sessionManager, isBotRunning);
+      break;
+    case 'remove':
+      await removeSession(sessionManager);
+      await showSessionManagementMenu(sessionManager, isBotRunning);
+      break;
+    case 'list':
+      await listSessions();
+      await showSessionManagementMenu(sessionManager, isBotRunning);
+      break;
+    case 'qr':
+      await showQRLinks();
+      await showSessionManagementMenu(sessionManager, isBotRunning);
+      break;
+    case 'continue':
+      return true; // Continuar con el inicio del bot
+    case 'exit':
+      if (isBotRunning) {
+        console.log('\n💡 Volviendo al bot. Los cambios ya están aplicados.\n');
+        return false;
+      }
+      console.log('\n👋 ¡Hasta luego!\n');
+      process.exit(0);
+  }
+
+  return false;
+}
+
+// Menú inicial al arrancar
+export async function showInitialMenu() {
+  const sessions = await loadSessions();
+
+  console.log('\n🚀 ============================================');
+  console.log('   WHATSAPP BOT - MENÚ PRINCIPAL');
+  console.log('============================================\n');
+  console.log(`📋 Sesiones configuradas: ${sessions.length}`);
+  if (sessions.length > 0) {
+    sessions.forEach((s, i) => console.log(`   ${i + 1}. ${s}`));
+  }
+  console.log('');
+
+  const { action } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'action',
+      message: '¿Qué quieres hacer?',
+      choices: [
+        { name: '▶️  Iniciar bot directamente', value: 'start' },
+        { name: '⚙️  Gestionar sesiones primero', value: 'manage' },
+        { name: '⚙️  Gestionar sesiones y luego iniciar bot', value: 'manage_and_start' },
+        { name: '❌ Salir', value: 'exit' }
+      ]
+    }
+  ]);
+
+  switch (action) {
+    case 'start':
+      return { shouldStart: true, shouldManage: false };
+    case 'manage':
+      const shouldContinue = await showSessionManagementMenu(null, false);
+      return { shouldStart: shouldContinue, shouldManage: true };
+    case 'manage_and_start':
+      await showSessionManagementMenu(null, false);
+      return { shouldStart: true, shouldManage: true };
+    case 'exit':
+      console.log('\n👋 ¡Hasta luego!\n');
+      process.exit(0);
+  }
+}
+

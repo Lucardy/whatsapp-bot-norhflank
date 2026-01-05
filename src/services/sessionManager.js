@@ -1,12 +1,7 @@
 // Gestor de sesiones de WhatsApp
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import qrcodeTerminal from 'qrcode-terminal';
-import QRCode from 'qrcode';
-import puppeteer from 'puppeteer';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { log, logSession } from '../utils/logger.js';
-import { handleMessage } from './messageHandler.js';
+import { log, logSession } from '../utils/logger/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,138 +24,80 @@ export class SessionManager {
     }));
   }
 
-  async createSession(sessionId) {
-    if (this.sessions.has(sessionId)) {
-      log(`⚠️ Sesión ${sessionId} ya existe`);
+  async createSession(sessionId, autoInit = false) {
+    const { canCreateSession, createSessionData } = await import('./sessionManager/sessionLifecycle.js');
+    
+    if (!canCreateSession(sessionId, this.sessions)) {
       return this.sessions.get(sessionId).client;
     }
 
     const sessionPath = path.join(this.sessionBaseDir, sessionId);
     log(`🔧 Creando sesión: ${sessionId} en ${sessionPath}`);
 
-    const sessionData = {
-      client: null,
-      isReady: false,
-      lastQRDataURL: null,
-      initInProgress: false
-    };
-
+    const sessionData = createSessionData(sessionId, sessionPath);
     this.sessions.set(sessionId, sessionData);
 
-    const client = this.buildClient(sessionId, sessionPath);
+    const client = await this.buildClient(sessionId, sessionPath);
     sessionData.client = client;
 
-    // Inicializar en background
-    this.ensureInit(sessionId).catch(err => {
-      log(`❌ Error inicializando sesión ${sessionId}:`, err?.message || err);
-    });
+    // Solo inicializar automáticamente si se solicita
+    if (autoInit) {
+      this.ensureInit(sessionId).catch(err => {
+        log(`❌ Error inicializando sesión ${sessionId}:`, err?.message || err);
+      });
+    }
 
     return client;
   }
 
-  buildClient(sessionId, sessionPath) {
-    logSession(sessionId, '🔧 Creando cliente WhatsApp');
-    const c = new Client({
-      authStrategy: new LocalAuth({ dataPath: sessionPath }),
-      webVersionCache: {
-        type: 'remote',
-        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/wa-version.json',
-      },
-      puppeteer: {
-        headless: true,
-        executablePath: puppeteer.executablePath(),
-        protocolTimeout: 120_000,
-        defaultViewport: { width: 800, height: 600, deviceScaleFactor: 1 },
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-          '--disable-extensions',
-          '--disable-background-networking',
-          '--disable-default-apps',
-          '--no-first-run',
-          '--no-default-browser-check',
-          '--mute-audio',
-          '--window-size=800,600',
-          '--blink-settings=imagesEnabled=false'
-        ]
-      }
-    });
-
+  /**
+   * Inicia una sesión (genera QR si es necesario)
+   * @param {string} sessionId - ID de la sesión a iniciar
+   */
+  async startSession(sessionId) {
     const sessionData = this.sessions.get(sessionId);
+    if (!sessionData) {
+      log(`⚠️ Sesión ${sessionId} no existe. Creándola primero...`);
+      await this.createSession(sessionId, false);
+    }
 
-    // Listeners de eventos
-    c.once('authenticated', async () => {
-      const s = await c.getState().catch(() => 'NO_STATE');
-      logSession(sessionId, '🔐 authenticated, state =', s);
-    });
+    // Si ya está inicializada, no hacer nada
+    if (sessionData?.isReady) {
+      log(`✅ Sesión ${sessionId} ya está conectada`);
+      return;
+    }
 
-    c.once('ready', async () => {
-      sessionData.isReady = true;
-      sessionData.lastQRDataURL = null;
-      const s = await c.getState().catch(() => 'NO_STATE');
-      logSession(sessionId, '✅ BOT IS READY | state =', s);
-      logSession(sessionId, '🎯 Listener de mensajes registrado y activo');
-      logSession(sessionId, '📬 El bot está listo para recibir mensajes');
-      
-      const listeners_create = c.listenerCount('message_create');
-      const listeners_message = c.listenerCount('message');
-      logSession(sessionId, `🔍 Listeners registrados - message_create: ${listeners_create}, message: ${listeners_message}`);
-    });
+    // Inicializar si no está en progreso
+    if (!sessionData?.initInProgress) {
+      log(`🚀 Iniciando sesión: ${sessionId}`);
+      await this.ensureInit(sessionId).catch(err => {
+        log(`❌ Error inicializando sesión ${sessionId}:`, err?.message || err);
+      });
+    } else {
+      log(`⏳ Sesión ${sessionId} ya está en proceso de inicialización`);
+    }
+  }
 
-    c.on('change_state', (s) => {
-      sessionData.isReady = (s === 'CONNECTED');
-      logSession(sessionId, '🔁 change_state:', s);
-    });
-
-    c.on('auth_failure', (m) => logSession(sessionId, '❌ auth_failure:', m));
-
-    c.on('disconnected', async (reason) => {
-      logSession(sessionId, '⚠️ disconnected, motivo:', reason);
-      if (reason === 'LOGOUT') {
-        logSession(sessionId, '🔄 Necesita re-escaneo de QR (logout desde el celular o conflicto de sesión)');
-      }
-      sessionData.isReady = false;
-      try { await c.destroy(); } catch {}
-      sessionData.client = null;
-      setTimeout(() => this.ensureInit(sessionId).catch(() => {}), 3000);
-    });
-
-    // QR
-    c.on('qr', async (qr) => {
-      if (sessionData.isReady) {
-        logSession(sessionId, '🔇 QR ignorado (ya conectado)');
-        return;
-      }
-      logSession(sessionId, '🟩 QR solicitado (cliente pidió autenticación)');
-      try { qrcodeTerminal.generate(qr, { small: true }); } catch {}
-      try {
-        sessionData.lastQRDataURL = await QRCode.toDataURL(qr);
-        logSession(sessionId, '📷 QR generado y cacheado en memoria');
-        try {
-          const projectRoot = path.resolve(__dirname, '../..');
-          await QRCode.toFile(path.join(projectRoot, `qr_${sessionId}.png`), qr);
-          logSession(sessionId, `💾 QR guardado como qr_${sessionId}.png (opcional)`);
-        } catch (err) {
-          logSession(sessionId, `⚠️ No se pudo escribir qr_${sessionId}.png:`, err?.message || err);
-        }
-      } catch (err) {
-        logSession(sessionId, '❌ Error generando QR:', err);
-      }
-    });
-
-    // Mensajes - usar el messageHandler
-    logSession(sessionId, '📝 Registrando listener de mensajes...');
-    logSession(sessionId, '🔔 Listener "message_create" será activado cuando el cliente esté ready');
+  async buildClient(sessionId, sessionPath) {
+    const { createWhatsAppClient } = await import('./sessionManager/clientBuilder.js');
+    const { setupEventListeners } = await import('./sessionManager/eventListeners.js');
     
-    c.on('message_create', (msg) => handleMessage(msg, sessionId));
-    c.on('message', (msg) => handleMessage(msg, sessionId));
-    logSession(sessionId, '✅ Listeners registrados en "message" y "message_create"');
+    // Crear el cliente
+    const client = createWhatsAppClient(sessionId, sessionPath);
+    
+    // Obtener datos de sesión
+    const sessionData = this.sessions.get(sessionId);
+    
+    // Configurar todos los event listeners
+    await setupEventListeners(
+      client,
+      sessionId,
+      sessionPath,
+      sessionData,
+      () => this.ensureInit(sessionId)
+    );
 
-    return c;
+    return client;
   }
 
   async ensureInit(sessionId) {
@@ -181,13 +118,43 @@ export class SessionManager {
       if (!sessionData.client) {
         logSession(sessionId, '📦 Cliente no existe, creando nuevo...');
         const sessionPath = path.join(this.sessionBaseDir, sessionId);
-        sessionData.client = this.buildClient(sessionId, sessionPath);
+        sessionData.client = await this.buildClient(sessionId, sessionPath);
       } else {
         logSession(sessionId, '♻️ Cliente ya existe, reutilizando...');
       }
       logSession(sessionId, '🔄 Llamando a client.initialize()...');
       await sessionData.client.initialize();
       logSession(sessionId, '✅ client.initialize() completado');
+      
+      // Verificar si el cliente ya está listo (puede pasar si se reutiliza un cliente existente)
+      // Si ya está listo, ejecutar la lógica del 'ready' manualmente
+      try {
+        const state = await sessionData.client.getState();
+        if (state === 'CONNECTED' && !sessionData.isReady) {
+          logSession(sessionId, '🔄 Cliente ya está conectado, ejecutando lógica de ready manualmente...');
+          const { markSessionReady } = await import('./sessionManager/stateManager.js');
+          const { setSessionReadyTime } = await import('./messageHandler/index.js');
+          const { captureAndSavePhoneNumber } = await import('./sessionManager/phoneCapture.js');
+          
+          const readyTime = Date.now();
+          markSessionReady(sessionData, sessionId, readyTime);
+          setSessionReadyTime(sessionId, readyTime);
+          await captureAndSavePhoneNumber(sessionData.client, sessionId, sessionData);
+          
+          sessionData.isReady = true;
+          sessionData.lastQRDataURL = null;
+          
+          logSession(sessionId, '✅ BOT IS READY (verificado manualmente) | state =', state);
+          logSession(sessionId, '🎯 Listener de mensajes registrado y activo');
+          logSession(sessionId, '📬 El bot está listo para recibir mensajes');
+        } else if (state === 'CONNECTED' && sessionData.isReady) {
+          logSession(sessionId, '✅ Cliente ya estaba listo y marcado como ready');
+        } else {
+          logSession(sessionId, `⏳ Cliente en estado: ${state}, esperando eventos...`);
+        }
+      } catch (stateError) {
+        logSession(sessionId, `⚠️ Error verificando estado del cliente: ${stateError?.message || stateError}`);
+      }
     } catch (e) {
       logSession(sessionId, '❌ Error en initialize():', e?.message || e, e?.stack);
       try { await sessionData.client?.destroy(); } catch {}
@@ -196,6 +163,99 @@ export class SessionManager {
       sessionData.initInProgress = false;
       logSession(sessionId, '🏁 ensureInit() finalizado');
     }
+  }
+
+  /**
+   * Elimina una sesión completamente (destruye el cliente y elimina del Map)
+   * @param {string} sessionId - ID de la sesión a eliminar
+   * @param {boolean} deleteAuth - Si true, elimina también la carpeta de autenticación
+   */
+  async destroySession(sessionId, deleteAuth = false) {
+    const sessionData = this.sessions.get(sessionId);
+    if (!sessionData) {
+      log(`⚠️ Sesión ${sessionId} no existe para eliminar`);
+      return false;
+    }
+
+    log(`🗑️ Eliminando sesión: ${sessionId}`);
+
+    // Destruir cliente
+    if (sessionData.client) {
+      try {
+        await sessionData.client.destroy();
+        log(`✅ Cliente de sesión ${sessionId} destruido`);
+      } catch (err) {
+        log(`⚠️ Error destruyendo cliente de sesión ${sessionId}:`, err?.message || err);
+      }
+    }
+
+    // Eliminar del Map
+    this.sessions.delete(sessionId);
+    log(`✅ Sesión ${sessionId} eliminada del manager`);
+
+    // Eliminar autenticación usando sessionLifecycle
+    const sessionPath = path.join(this.sessionBaseDir, sessionId);
+    const { cleanupSession } = await import('./sessionManager/sessionLifecycle.js');
+    await cleanupSession(sessionPath, deleteAuth);
+
+    return true;
+  }
+
+  /**
+   * Resetea una sesión (elimina autenticación y fuerza nuevo QR)
+   * @param {string} sessionId - ID de la sesión a resetear
+   * @param {boolean} deleteAll - Si true, elimina la carpeta completa (recomendado para cambio de WhatsApp)
+   */
+  async resetSession(sessionId, deleteAll = false) {
+    log(`🔄 Reseteando sesión: ${sessionId}${deleteAll ? ' (eliminando todo)' : ''}`);
+
+    // Obtener datos de sesión antes de destruir
+    const currentSessionData = this.sessions.get(sessionId);
+
+    // Limpiar recursos de la sesión (timeouts, intervals, listeners)
+    try {
+      const { cleanupSessionResources } = await import('../utils/resourceCleanup.js');
+      cleanupSessionResources(sessionId);
+    } catch (err) {
+      log(`⚠️ Error limpiando recursos: ${err?.message || err}`);
+    }
+
+    // Destruir sesión actual completamente
+    if (currentSessionData?.client) {
+      try {
+        // Remover todos los event listeners antes de destruir
+        if (currentSessionData.client.removeAllListeners) {
+          currentSessionData.client.removeAllListeners();
+        }
+        
+        // Forzar logout/desconexión antes de destruir
+        await currentSessionData.client.logout().catch(() => {});
+        await currentSessionData.client.destroy();
+        log(`✅ Cliente desconectado y destruido`);
+      } catch (err) {
+        log(`⚠️ Error destruyendo cliente:`, err?.message || err);
+      }
+    }
+
+    // Eliminar del Map
+    this.sessions.delete(sessionId);
+
+    // Eliminar autenticación usando sessionLifecycle
+    const sessionPath = path.join(this.sessionBaseDir, sessionId);
+    const { cleanupSession } = await import('./sessionManager/sessionLifecycle.js');
+    await cleanupSession(sessionPath, deleteAll);
+
+    // Esperar un poco para asegurar que todo se limpió
+    await new Promise(resolve => setTimeout(resolve, deleteAll ? 2000 : 1000));
+
+    // Recrear sesión con flag forceQR activado (auto-inicializar después de reset)
+    await this.createSession(sessionId, true);
+    const newSessionData = this.sessions.get(sessionId);
+    if (newSessionData) {
+      newSessionData.forceQR = true; // Forzar mostrar QR incluso si se conecta rápido
+      newSessionData.isReady = false; // Asegurar que no esté marcada como ready
+    }
+    log(`✅ Sesión ${sessionId} reseteada y recreada (forzando QR)`);
   }
 }
 

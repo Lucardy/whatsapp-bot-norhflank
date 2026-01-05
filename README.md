@@ -18,24 +18,25 @@ Bot de WhatsApp que soporta múltiples cuentas simultáneamente, cada una con su
 npm install
 ```
 
-### 2. Gestionar sesiones
-```bash
-npm run manage
-```
-
-Esto abrirá un menú interactivo donde puedes:
-- ➕ Agregar nuevas sesiones
-- ➖ Eliminar sesiones
-- 📋 Ver sesiones configuradas
-- 🔗 Ver links de QR
-
-### 3. Iniciar el bot
+### 2. Iniciar el bot (todo en uno)
 ```bash
 npm start
 ```
 
-### 4. Escanear QR
-Abre el link que te mostró el gestor (ej: `http://localhost:3000/qr/unikuo`) y escanea con WhatsApp.
+Esto abrirá un **menú interactivo unificado** donde puedes:
+- ▶️ Iniciar el bot directamente
+- ⚙️ Gestionar sesiones (agregar, eliminar, listar, ver QR)
+- ⚙️ Gestionar sesiones y luego iniciar el bot
+
+**¡Todo está integrado en un solo comando!** 🎉
+
+### 3. Escanear QR
+Cuando el bot esté corriendo, abre el link del QR (ej: `http://localhost:3000/qr/unikuo`) y escanea con WhatsApp.
+
+**Nota:** Si quieres iniciar el bot sin el menú (útil para producción), usa:
+```bash
+npm run start:direct
+```
 
 ## 📁 Estructura del Proyecto
 

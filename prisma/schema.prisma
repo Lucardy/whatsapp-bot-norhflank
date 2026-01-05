@@ -1,0 +1,111 @@
+// Prisma Schema - Base de datos para WhatsApp Bot Multi-Cliente
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Planes de suscripción
+model Plan {
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique // "básico", "pro", "premium"
+  price_monthly       Decimal  @db.Decimal(10, 2)
+  max_sessions        Int      @default(1) // Cuántos WhatsApp puede tener
+  max_messages_per_month Int?  // Null = ilimitado
+  features            Json?    // Características del plan en JSON
+  created_at          DateTime @default(now())
+  
+  clients             Client[]
+  
+  @@map("plans")
+}
+
+// Clientes (negocios que usan el bot)
+model Client {
+  id                  Int      @id @default(autoincrement())
+  name                String   @unique // Nombre del negocio
+  contact_phone       String?
+  contact_email       String?
+  status              String   @default("trial") // trial, active, suspended, cancelled
+  plan_id             Int?
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  
+  plan                Plan?    @relation(fields: [plan_id], references: [id])
+  sessions            WhatsAppSession[]
+  config              ClientConfig?
+  
+  @@map("clients")
+}
+
+// Sesiones de WhatsApp
+model WhatsAppSession {
+  id                  Int      @id @default(autoincrement())
+  client_id           Int
+  session_name        String   @unique // Identificador único de la sesión
+  phone_number        String?
+  status              String   @default("qr_pending") // qr_pending, connecting, connected, disconnected, error
+  session_type        String   @default("client") // "master" (número de la empresa) o "client" (número del cliente)
+  last_activity       DateTime?
+  session_path        String?  // Ruta donde se guarda la sesión
+  
+  client              Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  
+  @@map("whatsapp_sessions")
+  @@index([client_id])
+  @@index([session_name])
+  @@index([session_type])
+}
+
+// Configuración de respuestas por cliente
+model ClientConfig {
+  id                  Int      @id @default(autoincrement())
+  client_id           Int      @unique
+  welcome_message     String?  // Mensaje de bienvenida
+  menu_options        Json?    // Opciones del menú en JSON
+  auto_responses      Json?    // Respuestas automáticas personalizadas
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  
+  client              Client   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  
+  @@map("client_configs")
+}
+
+// Usuarios administradores (futuro - para paneles)
+model User {
+  id                  Int      @id @default(autoincrement())
+  email               String   @unique
+  password_hash       String
+  role                String   @default("admin") // admin, support
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  
+  @@map("users")
+}
+
+// Log de mensajes (opcional para analytics)
+model Message {
+  id                  Int      @id @default(autoincrement())
+  session_id          Int
+  from_number         String
+  to_number           String?
+  message_body        String?  @db.Text
+  direction           String   // "inbound", "outbound"
+  response_sent       Boolean  @default(false)
+  created_at          DateTime @default(now())
+  
+  // Relación con sesión (opcional, puede ser null si la sesión se elimina)
+  // session            WhatsAppSession? @relation(fields: [session_id], references: [id])
+  
+  @@map("messages")
+  @@index([session_id])
+  @@index([created_at])
+}
+

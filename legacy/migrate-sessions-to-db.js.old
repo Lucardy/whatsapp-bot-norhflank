@@ -1,0 +1,66 @@
+// Script para migrar sesiones existentes de sessions-config.json a la base de datos
+import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '../');
+
+const prisma = new PrismaClient();
+
+async function migrateSessions() {
+  console.log('🔄 Iniciando migración de sesiones a base de datos...');
+
+  try {
+    // Leer sessions-config.json
+    const configPath = path.join(PROJECT_ROOT, 'sessions-config.json');
+    if (!fs.existsSync(configPath)) {
+      console.log('⚠️ No se encontró sessions-config.json, nada que migrar');
+      return;
+    }
+
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const sessions = config.sessions || [];
+
+    if (sessions.length === 0) {
+      console.log('⚠️ No hay sesiones en sessions-config.json');
+      return;
+    }
+
+    console.log(`📋 Sesiones encontradas: ${sessions.join(', ')}`);
+
+    // Verificar que existan los clientes en la DB
+    for (const sessionName of sessions) {
+      const session = await prisma.whatsAppSession.findUnique({
+        where: { session_name: sessionName },
+        include: { client: true }
+      });
+
+      if (!session) {
+        console.log(`⚠️ Sesión "${sessionName}" no existe en la DB. Asegúrate de ejecutar el seed primero.`);
+      } else {
+        console.log(`✅ Sesión "${sessionName}" ya existe en la DB (cliente: ${session.client.name})`);
+      }
+    }
+
+    console.log('✅ Migración completada (las sesiones ya están en la DB desde el seed)');
+  } catch (error) {
+    console.error('❌ Error en migración:', error);
+    throw error;
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+migrateSessions()
+  .then(() => {
+    console.log('🎉 Proceso completado');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('❌ Error fatal:', error);
+    process.exit(1);
+  });
+

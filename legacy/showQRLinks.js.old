@@ -1,0 +1,25 @@
+// Función para mostrar links de QR
+import { loadSessions, getPort } from '../sessionHelpers.js';
+
+/**
+ * Muestra los links de QR para todas las sesiones
+ */
+export async function showQRLinks() {
+  const sessions = await loadSessions();
+
+  console.log('\n🔗 Links de QR para Escanear\n');
+
+  if (sessions.length === 0) {
+    console.log('   ⚠️ No hay clientes configurados.\n');
+    return;
+  }
+
+  sessions.forEach((session, index) => {
+    const qrLink = `http://localhost:${getPort()}/qr/${session}`;
+    console.log(`   ${index + 1}. ${session}:`);
+    console.log(`      ${qrLink}`);
+  });
+
+  console.log('\n💡 El bot debe estar corriendo para que estos links funcionen.\n');
+}
+

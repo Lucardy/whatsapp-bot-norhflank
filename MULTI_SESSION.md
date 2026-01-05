@@ -6,19 +6,30 @@ El bot ahora soporta **múltiples cuentas de WhatsApp simultáneamente**. Cada c
 
 ## 🚀 Configuración Rápida
 
-### ⭐ Opción Recomendada: Gestor Interactivo
+### ⭐ Opción Recomendada: Menú Integrado
 
-Usa el gestor de sesiones interactivo (más fácil y cómodo):
+Ejecuta simplemente:
+
+```bash
+npm start
+```
+
+Esto abrirá un menú interactivo donde puedes:
+- ▶️ Iniciar el bot directamente
+- ⚙️ Gestionar sesiones (agregar, eliminar, listar, ver QR)
+- ⚙️ Gestionar sesiones y luego iniciar el bot
+
+**Todo está unificado en un solo comando!** 🎉
+
+### Opción Alternativa: Gestor Separado
+
+Si prefieres usar el gestor de sesiones por separado:
 
 ```bash
 npm run manage
 ```
 
-Esto abrirá un menú donde puedes:
-- ➕ Agregar nuevas sesiones
-- ➖ Eliminar sesiones
-- 📋 Ver sesiones configuradas
-- 🔗 Ver links de QR
+Esto abrirá el mismo menú de gestión de sesiones.
 
 ### Opción 2: Variable de Entorno
 
