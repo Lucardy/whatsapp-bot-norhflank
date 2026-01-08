@@ -1,6 +1,6 @@
 // Gestión de chats manejados manualmente por humanos
 import { logSession } from '../../utils/logger/index.js';
-import { HUMAN_INACTIVITY_TIMEOUT, BOT_MESSAGE_WINDOW } from '../../config/constants.js';
+import { HUMAN_INACTIVITY_TIMEOUT, BOT_MESSAGE_WINDOW, BOT_MESSAGE_REGISTER_DELAY } from '../../config/constants.js';
 
 // Chats manejados manualmente por humanos (para pausar el bot)
 // Estructura: Map<sessionId, Map<chatId, { timestamp: number, timeout: NodeJS.Timeout }>>
@@ -92,7 +92,7 @@ export async function markChatAsHumanManaged(sessionId, chatId) {
   // EXCEPCIÓN: Si el chat está en modo administración, NO marcar como manejado por humano
   // El bot debe seguir respondiendo a los comandos del menú admin
   try {
-    const { isInAdminMode } = await import('../../services/adminFlow.js');
+    const { isInAdminMode } = await import('../../services/adminFlow/index.js');
     if (isInAdminMode(chatId)) {
       logSession(sessionId, `🔐 Ignorando detección de acción humana en chat ${chatId} (modo administración activo)`);
       return; // No pausar el bot si está en modo admin
@@ -157,5 +157,35 @@ export function clearHumanManagedChats(sessionId) {
     sessionChats.clear();
     humanManagedChats.delete(sessionId);
   }
+}
+
+/**
+ * Envía un mensaje del bot con el patrón estándar: markBotSentMessage + delay + reply
+ * Esta función consolida el patrón repetido en múltiples lugares del código
+ * @param {Object} msg - Objeto de mensaje de whatsapp-web.js
+ * @param {string} sessionId - ID de la sesión
+ * @param {string} chatId - ID del chat (número de teléfono)
+ * @param {string} message - Mensaje a enviar
+ * @returns {Promise<void>}
+ */
+export async function sendBotMessage(msg, sessionId, chatId, message) {
+  markBotSentMessage(sessionId, chatId);
+  await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
+  await msg.reply(message);
+}
+
+/**
+ * Envía un mensaje del bot con media (imagen, etc.) usando el patrón estándar
+ * @param {Object} msg - Objeto de mensaje de whatsapp-web.js
+ * @param {string} sessionId - ID de la sesión
+ * @param {string} chatId - ID del chat (número de teléfono)
+ * @param {Object} media - Objeto de media de whatsapp-web.js (MessageMedia)
+ * @param {string} caption - Texto opcional para el media
+ * @returns {Promise<void>}
+ */
+export async function sendBotMessageWithMedia(msg, sessionId, chatId, media, caption = '') {
+  markBotSentMessage(sessionId, chatId);
+  await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
+  await msg.reply(media, undefined, { caption });
 }
 

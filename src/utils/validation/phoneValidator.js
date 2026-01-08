@@ -16,6 +16,57 @@ export function normalizePhoneNumber(phoneNumber) {
 }
 
 /**
+ * Normaliza un número de teléfono y detecta/agrega código de país si es necesario
+ * @param {string} phoneNumber - Número de teléfono a normalizar
+ * @param {string} defaultCountry - Código de país por defecto ('AR' para Argentina, 'CL' para Chile)
+ * @param {string} sessionId - ID de la sesión para logging (opcional)
+ * @returns {Promise<string>} Número normalizado con código de país
+ */
+export async function normalizePhoneWithCountryCode(phoneNumber, defaultCountry = 'AR', sessionId = null) {
+  const { logSession } = await import('../../utils/logger/index.js');
+  const logger = sessionId ? (msg) => logSession(sessionId, msg) : () => {};
+  
+  let normalizedPhone = normalizePhoneNumber(phoneNumber);
+  
+  // Si ya tiene código de país (empieza con 54 o 56), retornar tal cual
+  if (normalizedPhone.startsWith('54')) {
+    logger(`📱 Detectado número argentino (código 54)`);
+    return normalizedPhone;
+  }
+  
+  if (normalizedPhone.startsWith('56')) {
+    logger(`📱 Detectado número chileno (código 56)`);
+    return normalizedPhone;
+  }
+  
+  // Si el número parece tener código de país (12+ dígitos, empieza con 5)
+  if (normalizedPhone.startsWith('5') && normalizedPhone.length >= 11) {
+    logger(`📱 Número parece tener código de país (${normalizedPhone.length} dígitos, empieza con 5)`);
+    return normalizedPhone;
+  }
+  
+  // Si el número es corto, agregar código de país según el formato
+  if (normalizedPhone.length < 12) {
+    if (normalizedPhone.startsWith('9')) {
+      // Números que empiezan con 9 suelen ser argentinos
+      normalizedPhone = '54' + normalizedPhone;
+      logger(`📱 Agregado código de país 54 (Argentina)`);
+    } else if (normalizedPhone.length === 9 || (normalizedPhone.length === 10 && normalizedPhone.startsWith('9'))) {
+      // Formato argentino detectado
+      normalizedPhone = '54' + normalizedPhone;
+      logger(`📱 Agregado código de país 54 (Argentina) - formato detectado`);
+    } else {
+      // Por defecto, usar el código de país especificado
+      const countryCode = defaultCountry === 'CL' ? '56' : '54';
+      normalizedPhone = countryCode + normalizedPhone;
+      logger(`📱 Agregado código de país ${countryCode} (${defaultCountry === 'CL' ? 'Chile' : 'Argentina'}) - formato detectado`);
+    }
+  }
+  
+  return normalizedPhone;
+}
+
+/**
  * Valida formato básico de número de teléfono
  * @param {string} phoneNumber - Número de teléfono
  * @returns {boolean} true si el formato es válido

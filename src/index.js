@@ -3,7 +3,7 @@ import fs from 'fs';
 import express from 'express';
 import { log } from './utils/logger/index.js';
 import { config, loadSessionsConfig } from './config/index.js';
-import { SessionManager } from './services/sessionManager.js';
+import { SessionManager } from './services/sessionManager/index.js';
 import { setupRoutes } from './routes/index.js';
 import { setBotStartTime } from './services/messageHandler/index.js';
 import { testConnection } from './config/database.js';

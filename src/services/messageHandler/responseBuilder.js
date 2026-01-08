@@ -37,8 +37,8 @@ export async function getResponses(sessionId, clientName = null, clientId = null
     // Si el cliente tiene un mensaje de bienvenida personalizado, usarlo
     // Si no, usar el mensaje de bienvenida por defecto de Unikuo
     const welcomePart1 = clientConfig.welcome_message || (clientName
-      ? `👋 ¡Hola ${clientName}! 👋\n\nMe alegra verte de nuevo.\n\nEn *Unikuo* ofrecemos:\n• 🖥️ Páginas web profesionales\n• 📱 Marketing digital\n• 🤖 Bots de WhatsApp\n\nEstoy aquí para ayudarte.`
-      : `👋 ¡Hola! 👋\n\nBienvenido a *Unikuo*, servicio de creación de páginas web.\n\nEn *Unikuo* ofrecemos:\n• 🖥️ Páginas web profesionales\n• 📱 Marketing digital\n• 🤖 Bots de WhatsApp\n\nEstoy aquí para ayudarte.`);
+      ? `👋 ¡Hola ${clientName}! 👋\n\nMe alegra verte de nuevo 😊\n\nEn *Unikuo* creamos páginas web, marketing digital y bots de WhatsApp. ¿En qué te puedo ayudar?`
+      : `👋 ¡Hola! 👋\n\nBienvenido a *Unikuo* 😊\n\nSomos especialistas en:\n🖥️ Páginas web profesionales\n📱 Marketing digital\n🤖 Bots de WhatsApp\n\n¿En qué te puedo ayudar?`);
     
     // Construir lista de opciones desde la configuración del cliente
     const optionsList = clientConfig.menu_options.options
@@ -46,31 +46,23 @@ export async function getResponses(sessionId, clientName = null, clientId = null
       .join('\n');
     
     // Parte 2: Opciones (usar las opciones del cliente si están disponibles)
+    // NOTA: No mostrar opción de configuración en el master - los clientes gestionan desde su propio bot
     const welcomePart2 = clientConfig.menu_options.options.length > 0
-      ? `¿Qué te gustaría saber?\n\n${optionsList}${clientId && clientName && sessionType === 'master' ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`
-      : `¿Qué te gustaría saber?\n\n1️⃣ Consultar precios\n2️⃣ Información de nuestros trabajos\n3️⃣ Ver nuestra página web\n4️⃣ Hablar con un agente personal\n5️⃣ Prueba gratuita de bot de WhatsApp\n6️⃣ Test de envío de imagen${clientId && clientName ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`;
+      ? `📋 *¿Qué te gustaría saber?*\n\n${optionsList}\n\n👉 *Escribe el número de la opción que te interesa*`
+      : `📋 *¿Qué te gustaría saber?*\n\n1️⃣ Consultar precios\n2️⃣ Ver nuestros trabajos\n3️⃣ Visitar nuestra página web\n4️⃣ Hablar con un agente\n5️⃣ Prueba gratuita de bot\n\n👉 *Escribe el número de la opción que te interesa*`;
     
     // Mensaje para opciones inválidas (usar las opciones del cliente si están disponibles)
     const invalidOption = clientConfig.menu_options.options.length > 0
-      ? `❓ No entendí tu mensaje.\n\nPor favor, elige una de las opciones disponibles:\n\n${optionsList}${clientId && clientName && sessionType === 'master' ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`
-      : `❓ No entendí tu mensaje.\n\nPor favor, elige una de las opciones disponibles:\n\n1️⃣ Consultar precios\n2️⃣ Información de nuestros trabajos\n3️⃣ Ver nuestra página web\n4️⃣ Hablar con un agente personal\n5️⃣ Prueba gratuita de bot de WhatsApp\n6️⃣ Test de envío de imagen${clientId && clientName ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`;
+      ? `❓ No entendí tu mensaje.\n\n📋 *Opciones disponibles:*\n\n${optionsList}\n\n👉 *Escribe el número de la opción que te interesa*`
+      : `❓ No entendí tu mensaje.\n\n📋 *Opciones disponibles:*\n\n1️⃣ Consultar precios\n2️⃣ Ver nuestros trabajos\n3️⃣ Visitar nuestra página web\n4️⃣ Hablar con un agente\n5️⃣ Prueba gratuita de bot\n\n👉 *Escribe el número de la opción que te interesa*`;
     
     responses.welcome_part1 = welcomePart1;
     responses.welcome_part2 = welcomePart2;
     responses.invalid_option = invalidOption;
     responses.default = welcomeMessage; // Mantener para compatibilidad
     
-    // Si es un cliente conocido escribiendo al master, agregar opción de configurar
-    if (clientId && clientName) {
-      const { getSessionType } = await import('../database/sessionService.js');
-      const sessionType = await getSessionType(sessionId);
-      
-      if (sessionType === 'master') {
-        responses['configurar'] = '⚙️ Configurar respuestas del bot';
-        responses['⚙️'] = '⚙️ Configurar respuestas del bot';
-        responses['config'] = '⚙️ Configurar respuestas del bot';
-      }
-    }
+    // NOTA: Los clientes gestionan su bot desde su propio WhatsApp, no desde el master
+    // Removida la opción de configuración desde el master para mantener separación de responsabilidades
     
     return responses;
   }
@@ -152,17 +144,17 @@ Escribe "5" o "prueba gratuita" para comenzar el proceso de registro.`,
 
     // Mensaje de bienvenida (parte 1 - saludo e información)
     welcome_part1: clientName
-      ? `👋 ¡Hola ${clientName}! 👋\n\nMe alegra verte de nuevo.\n\nEn *Unikuo* ofrecemos:\n• 🖥️ Páginas web profesionales\n• 📱 Marketing digital\n• 🤖 Bots de WhatsApp\n\nEstoy aquí para ayudarte.`
-      : `👋 ¡Hola! 👋\n\nBienvenido a *Unikuo*, servicio de creación de páginas web.\n\nEn *Unikuo* ofrecemos:\n• 🖥️ Páginas web profesionales\n• 📱 Marketing digital\n• 🤖 Bots de WhatsApp\n\nEstoy aquí para ayudarte.`,
+      ? `👋 ¡Hola ${clientName}! 👋\n\nMe alegra verte de nuevo 😊\n\nEn *Unikuo* creamos páginas web, marketing digital y bots de WhatsApp. ¿En qué te puedo ayudar?`
+      : `👋 ¡Hola! 👋\n\nBienvenido a *Unikuo* 😊\n\nSomos especialistas en:\n🖥️ Páginas web profesionales\n📱 Marketing digital\n🤖 Bots de WhatsApp\n\n¿En qué te puedo ayudar?`,
 
     // Mensaje de bienvenida (parte 2 - opciones)
-    welcome_part2: `¿Qué te gustaría saber?\n\n1️⃣ Consultar precios\n2️⃣ Información de nuestros trabajos\n3️⃣ Ver nuestra página web\n4️⃣ Hablar con un agente personal\n5️⃣ Prueba gratuita de bot de WhatsApp\n6️⃣ Test de envío de imagen${clientId && clientName ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`,
+    welcome_part2: `📋 *¿Qué te gustaría saber?*\n\n1️⃣ Consultar precios\n2️⃣ Ver nuestros trabajos\n3️⃣ Visitar nuestra página web\n4️⃣ Hablar con un agente\n5️⃣ Prueba gratuita de bot\n\n👉 *Escribe el número de la opción que te interesa*`,
 
     // Mensaje para opciones inválidas
-    invalid_option: `❓ No entendí tu mensaje.\n\nPor favor, elige una de las opciones disponibles:\n\n1️⃣ Consultar precios\n2️⃣ Información de nuestros trabajos\n3️⃣ Ver nuestra página web\n4️⃣ Hablar con un agente personal\n5️⃣ Prueba gratuita de bot de WhatsApp\n6️⃣ Test de envío de imagen${clientId && clientName ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`,
+    invalid_option: `❓ No entendí tu mensaje.\n\n📋 *Opciones disponibles:*\n\n1️⃣ Consultar precios\n2️⃣ Ver nuestros trabajos\n3️⃣ Visitar nuestra página web\n4️⃣ Hablar con un agente\n5️⃣ Prueba gratuita de bot\n\n👉 *Escribe el número de la opción que te interesa*`,
 
     // Mantener default para compatibilidad (pero no se usará en el nuevo flujo)
-    default: `${greeting}\n\nEstoy aquí para ayudarte.\n¿Qué te gustaría saber?\n\n1️⃣ Consultar precios\n2️⃣ Información de nuestros trabajos\n3️⃣ Ver nuestra página web\n4️⃣ Hablar con un agente personal\n5️⃣ Prueba gratuita de bot de WhatsApp\n6️⃣ Test de envío de imagen${clientId && clientName ? '\n⚙️ Configurar respuestas del bot' : ''}\n\nEscribe el número de la opción que te interesa.`
+    default: `${greeting}\n\nEstoy aquí para ayudarte.\n¿Qué te gustaría saber?\n\n1️⃣ Consultar precios\n2️⃣ Ver nuestros trabajos\n3️⃣ Visitar nuestra página web\n4️⃣ Hablar con un agente\n5️⃣ Prueba gratuita de bot\n\nEscribe el número de la opción que te interesa.`
   };
 }
 

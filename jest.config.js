@@ -18,6 +18,7 @@ export default {
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
   verbose: true,
-  testTimeout: 10000
+  testTimeout: 10000,
+  maxWorkers: 1 // Ejecutar tests en serie para evitar problemas con módulos
 };
 

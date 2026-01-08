@@ -11,13 +11,15 @@ import { renderQRNotFound, renderQRConnected, renderQRLoading, renderQRPage } fr
 export function setupQRRoutes(app, sessionManager, sessionsConfig) {
   // QR de una sesión específica
   app.get('/qr/:sessionId', async (req, res) => {
-    const { sessionId } = req.params;
-    let sessionData = sessionManager.getSession(sessionId);
-    
-    // Si la sesión no existe, verificar si está en la configuración o en la base de datos
-    if (!sessionData) {
-      // Primero verificar si está en la configuración en memoria
-      if (sessionsConfig.includes(sessionId)) {
+    try {
+      const { sessionId } = req.params;
+      log(`🔍 Solicitud de QR para sesión: "${sessionId}"`);
+      let sessionData = sessionManager.getSession(sessionId);
+      
+      // Si la sesión no existe, verificar si está en la configuración o en la base de datos
+      if (!sessionData) {
+        // Primero verificar si está en la configuración en memoria
+        if (sessionsConfig.includes(sessionId)) {
         try {
           log(`🔄 Sesión "${sessionId}" no existe, creándola automáticamente...`);
           await sessionManager.createSession(sessionId, true); // Auto-inicializar cuando se accede al QR
@@ -61,20 +63,45 @@ export function setupQRRoutes(app, sessionManager, sessionsConfig) {
     // Si forceQR está activo pero no hay QR aún, mostrar página de espera
     if (!sessionData.lastQRDataURL) {
       // Si el QR aún no está generado, mostrar página con auto-refresh
+      log(`⏳ QR aún no generado para sesión "${sessionId}", mostrando página de carga...`);
       return res.send(renderQRLoading(sessionId));
     }
     
-    // Si hay QR, mostrar la imagen
-    const img = Buffer.from(sessionData.lastQRDataURL.split(',')[1], 'base64');
+    log(`✅ QR encontrado para sesión "${sessionId}", procesando...`);
     
-    // Si el cliente acepta HTML, mostrar página con la imagen
-    if (req.headers.accept && req.headers.accept.includes('text/html')) {
-      return res.send(renderQRPage(sessionId, sessionData.lastQRDataURL));
+    // Validar formato del QR DataURL
+    if (!sessionData.lastQRDataURL.startsWith('data:image/')) {
+      log(`⚠️ QR DataURL con formato inválido para sesión "${sessionId}": ${sessionData.lastQRDataURL?.substring(0, 50) || 'null'}...`);
+      return res.status(500).send(renderQRLoading(sessionId));
     }
     
-    // Si solo pide la imagen, devolver la imagen directamente
-    res.set('Content-Type', 'image/png');
-    res.send(img);
+    try {
+      // Si hay QR, mostrar la imagen
+      const qrParts = sessionData.lastQRDataURL.split(',');
+      if (qrParts.length < 2) {
+        log(`⚠️ QR DataURL mal formateado para sesión "${sessionId}"`);
+        return res.status(500).send(renderQRLoading(sessionId));
+      }
+      
+      const img = Buffer.from(qrParts[1], 'base64');
+      
+      // Si el cliente acepta HTML, mostrar página con la imagen
+      if (req.headers.accept && req.headers.accept.includes('text/html')) {
+        return res.send(renderQRPage(sessionId, sessionData.lastQRDataURL));
+      }
+      
+      // Si solo pide la imagen, devolver la imagen directamente
+      res.set('Content-Type', 'image/png');
+      res.send(img);
+    } catch (error) {
+      log(`❌ Error procesando QR para sesión "${sessionId}":`, error?.message || error);
+      return res.status(500).send(renderQRLoading(sessionId));
+    }
+    } catch (error) {
+      // Capturar cualquier error no manejado
+      log(`❌ Error inesperado en ruta QR para sesión "${sessionId}":`, error?.message || error);
+      return res.status(500).send(renderQRLoading(sessionId));
+    }
   });
 
   // QR de la primera sesión (compatibilidad hacia atrás)

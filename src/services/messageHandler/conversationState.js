@@ -88,13 +88,19 @@ export function resetConversationState(sessionId, chatId) {
 }
 
 /**
- * Verifica si un mensaje es una opción válida (1, 2, 3, 4, configurar, etc.)
+ * Verifica si un mensaje es una opción válida (1-8, configurar, etc.)
  * @param {string} message - Mensaje del usuario
  * @returns {boolean} true si es una opción válida
  */
 export function isValidOption(message) {
   const messageLower = message.toLowerCase().trim();
-  const validOptions = ['1', '2', '3', '4', '5', '6', 'prueba gratuita', 'prueba', 'configurar', 'config', '⚙️', 'test imagen', 'testimagen'];
-  return validOptions.includes(messageLower) || messageLower.includes('⚙️') || messageLower.includes('prueba') || messageLower.includes('test imagen');
+  // Opciones numéricas 1-8
+  const numericOption = parseInt(messageLower);
+  if (!isNaN(numericOption) && numericOption >= 1 && numericOption <= 8) {
+    return true;
+  }
+  // Otras opciones válidas
+  const validOptions = ['prueba gratuita', 'prueba', 'configurar', 'config', '⚙️', 'test pairing', 'test'];
+  return validOptions.includes(messageLower) || messageLower.includes('⚙️') || messageLower.includes('prueba') || messageLower.includes('test');
 }
 

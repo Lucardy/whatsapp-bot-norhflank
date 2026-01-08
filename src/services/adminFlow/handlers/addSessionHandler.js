@@ -48,7 +48,7 @@ export async function addSessionFromAdmin(sessionName, sessionType, masterSessio
       // Para sesiones maestro, crear o usar cliente especial
       let client;
       if (isMaster) {
-        client = await db.client.findUnique({
+        client = await db.client.findFirst({
           where: { name: 'MASTER' }
         });
         
@@ -63,27 +63,50 @@ export async function addSessionFromAdmin(sessionName, sessionType, masterSessio
           });
         }
       } else {
-        // Para clientes, crear nuevo cliente
-        client = await db.client.create({
-          data: {
-            name: sessionName,
-            status: 'trial',
-            contact_email: null,
-            contact_phone: null
-          }
+        // Para clientes, verificar si ya existe antes de crear
+        client = await db.client.findFirst({
+          where: { name: sessionName }
         });
+        
+        if (!client) {
+          client = await db.client.create({
+            data: {
+              name: sessionName,
+              status: 'trial',
+              contact_email: null,
+              contact_phone: null
+            }
+          });
+        }
       }
       
-      // Crear sesión de WhatsApp
-      await db.whatsAppSession.create({
-        data: {
-          session_name: sessionName,
-          session_type: sessionType,
-          client_id: client.id,
-          phone_number: null,
-          is_active: true
-        }
+      // Verificar si la sesión ya existe
+      const existingSession = await db.whatsAppSession.findUnique({
+        where: { session_name: sessionName }
       });
+      
+      // Si no existe, crear la sesión con el tipo correspondiente
+      if (!existingSession) {
+        await db.whatsAppSession.create({
+          data: {
+            session_name: sessionName,
+            session_type: sessionType,
+            client_id: client.id,
+            phone_number: null,
+            status: 'qr_pending'
+          }
+        });
+        logSession(masterSessionId, `✅ Sesión "${sessionName}" creada en base de datos (tipo: ${sessionType})`);
+      } else {
+        // Si ya existe, actualizar el tipo si es diferente
+        if (existingSession.session_type !== sessionType) {
+          await db.whatsAppSession.update({
+            where: { session_name: sessionName },
+            data: { session_type: sessionType }
+          });
+          logSession(masterSessionId, `✅ Tipo de sesión "${sessionName}" actualizado a ${sessionType}`);
+        }
+      }
       
       logSession(masterSessionId, `✅ Sesión "${sessionName}" creada en base de datos`);
     } catch (dbError) {

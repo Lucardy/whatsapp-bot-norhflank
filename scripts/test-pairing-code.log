@@ -1,0 +1,18 @@
+[2026-01-06T14:25:25.107Z] 🚀 Iniciando script de pairing code
+[2026-01-06T14:25:25.110Z] 🔄 Inicializando cliente...
+[2026-01-06T14:25:34.447Z] 🔐 Intento 1/4: Estado del cliente: null, solicitando pairing code después de 8000ms...
+[2026-01-06T14:25:34.480Z] ❌ Error en intento 1: Evaluation failed: TypeError: Cannot read properties of undefined (reading 'PairingCodeLinkUtils')
+    at getCode (pptr://__puppeteer_evaluation_script__:3:42)
+    at pptr://__puppeteer_evaluation_script__:20:53
+[2026-01-06T14:25:37.125Z] 🔐 Intento 2/4: Estado del cliente: null, solicitando pairing code después de 12000ms...
+[2026-01-06T14:25:37.128Z] ❌ Error en intento 2: Evaluation failed: TypeError: Cannot read properties of undefined (reading 'PairingCodeLinkUtils')
+    at getCode (pptr://__puppeteer_evaluation_script__:3:42)
+    at pptr://__puppeteer_evaluation_script__:20:53
+[2026-01-06T14:25:43.117Z] 🔐 Intento 3/4: Estado del cliente: null, solicitando pairing code después de 18000ms...
+[2026-01-06T14:25:43.120Z] ❌ Error en intento 3: Evaluation failed: TypeError: Cannot read properties of undefined (reading 'PairingCodeLinkUtils')
+    at getCode (pptr://__puppeteer_evaluation_script__:3:42)
+    at pptr://__puppeteer_evaluation_script__:20:53
+[2026-01-06T14:25:50.119Z] 🔐 Intento 4/4: Estado del cliente: null, solicitando pairing code después de 25000ms...
+[2026-01-06T14:25:50.121Z] ❌ Error en intento 4: Evaluation failed: TypeError: Cannot read properties of undefined (reading 'PairingCodeLinkUtils')
+    at getCode (pptr://__puppeteer_evaluation_script__:3:42)
+    at pptr://__puppeteer_evaluation_script__:20:53

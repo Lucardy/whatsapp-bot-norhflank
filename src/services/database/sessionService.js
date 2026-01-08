@@ -41,6 +41,26 @@ export async function getSessionType(sessionName) {
 }
 
 /**
+ * Obtiene todas las sesiones de un tipo específico
+ * @param {string} sessionType - Tipo de sesión ('master' o 'client')
+ * @returns {Promise<Array>} Array de sesiones
+ */
+export async function getSessionsByType(sessionType) {
+  try {
+    const db = getPrisma();
+    return await db.whatsAppSession.findMany({
+      where: { session_type: sessionType },
+      include: {
+        client: true
+      }
+    });
+  } catch (error) {
+    logSession('system', `⚠️ Error obteniendo sesiones por tipo: ${error?.message || error}`);
+    return [];
+  }
+}
+
+/**
  * Actualiza el número de teléfono de una sesión
  * @param {string} sessionName - Nombre de la sesión
  * @param {string} phoneNumber - Número de teléfono
@@ -122,6 +142,24 @@ export async function getSessionByClientId(clientId, sessionType = null) {
   } catch (error) {
     logSession(`client_${clientId}`, '⚠️ Error obteniendo sesión:', error?.message || error);
     return null;
+  }
+}
+
+/**
+ * Obtiene todas las sesiones de un cliente
+ * @param {number} clientId - ID del cliente
+ * @returns {Promise<Array>} Array de sesiones
+ */
+export async function getSessionsByClientId(clientId) {
+  try {
+    const db = getPrisma();
+    return await db.whatsAppSession.findMany({
+      where: { client_id: clientId },
+      select: { session_name: true }
+    });
+  } catch (error) {
+    logSession(`client_${clientId}`, '⚠️ Error obteniendo sesiones:', error?.message || error);
+    return [];
   }
 }
 

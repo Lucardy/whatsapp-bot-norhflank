@@ -91,7 +91,7 @@ export async function addSession(sessionManager = null) {
     let client;
     if (isMaster) {
       // Buscar o crear un cliente especial para sesiones maestro
-      client = await db.client.findUnique({
+      client = await db.client.findFirst({
         where: { name: 'MASTER' }
       });
       
@@ -108,7 +108,7 @@ export async function addSession(sessionManager = null) {
       }
     } else {
       // Para clientes normales, crear el cliente con el nombre de la sesión
-      client = await db.client.findUnique({
+      client = await db.client.findFirst({
         where: { name: sessionName }
       });
       
@@ -139,6 +139,16 @@ export async function addSession(sessionManager = null) {
         }
       });
       console.log(`✅ Sesión "${sessionName}" creada en la base de datos (tipo: ${isMaster ? 'maestro' : 'cliente'})`);
+    } else {
+      // Si ya existe, actualizar el tipo si es diferente
+      const expectedType = isMaster ? 'master' : 'client';
+      if (existingSession.session_type !== expectedType) {
+        await db.whatsAppSession.update({
+          where: { session_name: sessionName },
+          data: { session_type: expectedType }
+        });
+        console.log(`✅ Tipo de sesión "${sessionName}" actualizado a ${expectedType}`);
+      }
     }
   } catch (err) {
     // Si no hay DB o hay error, continuar con archivo

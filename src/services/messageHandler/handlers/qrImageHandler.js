@@ -17,8 +17,9 @@ const __dirname = path.dirname(__filename);
  * @param {string} sessionId - ID de la sesión (master)
  * @param {string} chatId - ID del chat
  * @param {string} qrDataURL - Data URL del QR
+ * @param {string} [targetPhoneNumber] - Número de teléfono opcional donde enviar el QR (si no se especifica, se envía al chatId)
  */
-export async function sendQRImage(msg, sessionId, chatId, qrDataURL) {
+export async function sendQRImage(msg, sessionId, chatId, qrDataURL, targetPhoneNumber = null) {
   let tempFilePath = null;
   
   try {
@@ -91,8 +92,20 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL) {
     
     const client = sessionData.client;
     
-    // Obtener el ID del chat desde el mensaje
-    const chatIdFull = msg.from || `${chatId}@c.us`;
+    // Determinar el ID del chat: usar targetPhoneNumber si se especificó, sino usar el chatId original
+    let chatIdFull;
+    logSession(sessionId, `🔍 DEBUG - targetPhoneNumber recibido: ${targetPhoneNumber || 'null/undefined'}`);
+    logSession(sessionId, `🔍 DEBUG - tipo de targetPhoneNumber: ${typeof targetPhoneNumber}`);
+    
+    if (targetPhoneNumber) {
+      // Formatear el número de teléfono (agregar @c.us si no lo tiene)
+      chatIdFull = targetPhoneNumber.includes('@') ? targetPhoneNumber : `${targetPhoneNumber}@c.us`;
+      logSession(sessionId, `📱 Enviando QR a número especificado: ${targetPhoneNumber} -> ${chatIdFull}`);
+    } else {
+      // Usar el chatId original del mensaje
+      chatIdFull = msg.from || `${chatId}@c.us`;
+      logSession(sessionId, `📱 Enviando QR al chat original: ${chatIdFull} (targetPhoneNumber era null)`);
+    }
     
     // Verificar que el cliente esté listo
     if (!client.info || !client.info.wid) {
@@ -107,28 +120,13 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL) {
     markBotSentMessage(sessionId, chatId);
     await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
     
-    // Intentar enviar usando msg.reply con timeout
-    logSession(sessionId, `📤 Intentando enviar QR usando msg.reply() con timeout de ${MESSAGE_SEND_TIMEOUT / 1000}s...`);
+    // Si se especificó un número diferente, usar client.sendMessage directamente
+    // Si no, intentar usar msg.reply primero
     const startTime = Date.now();
     
-    try {
-      const sendPromise = msg.reply(media, null, {
-        caption: '📱 Escanea este QR con WhatsApp para activar tu bot'
-      });
-      
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout: msg.reply tardó más de ${MESSAGE_SEND_TIMEOUT / 1000} segundos`)), MESSAGE_SEND_TIMEOUT);
-      });
-      
-      const sentMessage = await Promise.race([sendPromise, timeoutPromise]);
-      const elapsedTime = Date.now() - startTime;
-      
-      logSession(sessionId, `✅ QR enviado como imagen usando msg.reply() en ${elapsedTime}ms. ID: ${sentMessage?.id?._serialized || sentMessage?.id || 'N/A'}`);
-    } catch (replyError) {
-      logSession(sessionId, `⚠️ Error usando msg.reply(): ${replyError?.message || replyError}`);
-      logSession(sessionId, `🔄 Intentando con client.sendMessage() como fallback...`);
-      
-      // Fallback: intentar con client.sendMessage
+    if (targetPhoneNumber) {
+      // Enviar a número específico usando client.sendMessage
+      logSession(sessionId, `📤 Enviando QR a número específico usando client.sendMessage() con timeout de ${MESSAGE_SEND_TIMEOUT / 1000}s...`);
       try {
         const sendPromise = client.sendMessage(chatIdFull, media, {
           caption: '📱 Escanea este QR con WhatsApp para activar tu bot'
@@ -141,10 +139,49 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL) {
         const sentMessage = await Promise.race([sendPromise, timeoutPromise]);
         const elapsedTime = Date.now() - startTime;
         
-        logSession(sessionId, `✅ QR enviado como imagen usando client.sendMessage() en ${elapsedTime}ms. ID: ${sentMessage?.id?._serialized || sentMessage?.id || 'N/A'}`);
+        logSession(sessionId, `✅ QR enviado como imagen a ${targetPhoneNumber} usando client.sendMessage() en ${elapsedTime}ms. ID: ${sentMessage?.id?._serialized || sentMessage?.id || 'N/A'}`);
       } catch (sendError) {
-        logSession(sessionId, `❌ Error también con client.sendMessage(): ${sendError?.message || sendError}`);
+        logSession(sessionId, `❌ Error enviando QR a número específico: ${sendError?.message || sendError}`);
         throw sendError;
+      }
+    } else {
+      // Enviar al chat original usando msg.reply primero
+      logSession(sessionId, `📤 Intentando enviar QR usando msg.reply() con timeout de ${MESSAGE_SEND_TIMEOUT / 1000}s...`);
+      try {
+        const sendPromise = msg.reply(media, null, {
+          caption: '📱 Escanea este QR con WhatsApp para activar tu bot'
+        });
+        
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout: msg.reply tardó más de ${MESSAGE_SEND_TIMEOUT / 1000} segundos`)), MESSAGE_SEND_TIMEOUT);
+        });
+        
+        const sentMessage = await Promise.race([sendPromise, timeoutPromise]);
+        const elapsedTime = Date.now() - startTime;
+        
+        logSession(sessionId, `✅ QR enviado como imagen usando msg.reply() en ${elapsedTime}ms. ID: ${sentMessage?.id?._serialized || sentMessage?.id || 'N/A'}`);
+      } catch (replyError) {
+        logSession(sessionId, `⚠️ Error usando msg.reply(): ${replyError?.message || replyError}`);
+        logSession(sessionId, `🔄 Intentando con client.sendMessage() como fallback...`);
+        
+        // Fallback: intentar con client.sendMessage
+        try {
+          const sendPromise = client.sendMessage(chatIdFull, media, {
+            caption: '📱 Escanea este QR con WhatsApp para activar tu bot'
+          });
+          
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error(`Timeout: sendMessage tardó más de ${MESSAGE_SEND_TIMEOUT / 1000} segundos`)), MESSAGE_SEND_TIMEOUT);
+          });
+          
+          const sentMessage = await Promise.race([sendPromise, timeoutPromise]);
+          const elapsedTime = Date.now() - startTime;
+          
+          logSession(sessionId, `✅ QR enviado como imagen usando client.sendMessage() en ${elapsedTime}ms. ID: ${sentMessage?.id?._serialized || sentMessage?.id || 'N/A'}`);
+        } catch (sendError) {
+          logSession(sessionId, `❌ Error también con client.sendMessage(): ${sendError?.message || sendError}`);
+          throw sendError;
+        }
       }
     }
     

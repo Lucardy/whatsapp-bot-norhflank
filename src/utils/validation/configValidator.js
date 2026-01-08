@@ -153,9 +153,14 @@ export function validateClientConfig(config, options = {}) {
       throw new ValidationError('Las opciones del menú son requeridas', 'menuOptions');
     }
     
+    // Si es un array vacío y es requerido, lanzar error
+    if (Array.isArray(config.menu_options) && config.menu_options.length === 0) {
+      throw new ValidationError('Debe haber al menos una opción en el menú', 'menuOptions');
+    }
+    
     validateMenuOptions(config.menu_options);
-  } else if (config.menu_options) {
-    // Si no es requerido pero está presente, validarlo
+  } else if (config.menu_options && Array.isArray(config.menu_options) && config.menu_options.length > 0) {
+    // Si no es requerido pero está presente y no está vacío, validarlo
     validateMenuOptions(config.menu_options);
   }
 }

@@ -68,33 +68,5 @@ export function validateSessionStatus(status) {
   }
 }
 
-/**
- * Valida un mensaje de configuración del bot
- * @param {string} message - Mensaje a validar
- * @param {number} maxLength - Longitud máxima permitida (default: 2000 caracteres)
- * @throws {ValidationError} Si el mensaje no es válido
- */
-export function validateBotMessage(message, maxLength = 2000) {
-  if (!message || typeof message !== 'string') {
-    throw new ValidationError('El mensaje es requerido', 'message');
-  }
-  
-  const trimmed = message.trim();
-  
-  if (trimmed.length === 0) {
-    throw new ValidationError('El mensaje no puede estar vacío', 'message');
-  }
-  
-  if (trimmed.length > maxLength) {
-    throw new ValidationError(
-      `El mensaje no puede tener más de ${maxLength} caracteres (tiene ${trimmed.length})`,
-      'message'
-    );
-  }
-  
-  // Validar que no sea solo espacios o caracteres especiales
-  if (trimmed.length < 3) {
-    throw new ValidationError('El mensaje debe tener al menos 3 caracteres', 'message');
-  }
-}
+// validateBotMessage ahora está en validation/messageValidator.js y se re-exporta arriba
 

@@ -10,7 +10,7 @@ import { logSession } from '../../utils/logger/index.js';
 export async function getClientByName(clientName) {
   try {
     const db = getPrisma();
-    return await db.client.findUnique({
+    return await db.client.findFirst({
       where: { name: clientName },
       include: {
         config: true,

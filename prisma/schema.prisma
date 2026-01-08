@@ -26,8 +26,8 @@ model Plan {
 // Clientes (negocios que usan el bot)
 model Client {
   id                  Int      @id @default(autoincrement())
-  name                String   @unique // Nombre del negocio
-  contact_phone       String?
+  name                String   // Nombre del negocio (puede repetirse, el único único es el número)
+  contact_phone       String?  @unique // Número de WhatsApp único
   contact_email       String?
   status              String   @default("trial") // trial, active, suspended, cancelled
   plan_id             Int?
@@ -70,6 +70,7 @@ model ClientConfig {
   welcome_message     String?  // Mensaje de bienvenida
   menu_options        Json?    // Opciones del menú en JSON
   auto_responses      Json?    // Respuestas automáticas personalizadas
+  bot_enabled         Boolean  @default(false) // Si el bot está activo o no (inicia desactivado)
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
   

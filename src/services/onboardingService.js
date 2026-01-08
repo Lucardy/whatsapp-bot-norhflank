@@ -85,10 +85,27 @@ export async function createClientWithSession(clientData, sessionName = null) {
       client_id: client.id,
       session_name: sessionName,
       session_type: 'client', // Es una sesión de cliente
-      status: 'qr_pending' // Esperando escaneo de QR
+      status: 'qr_pending', // Esperando escaneo de QR
+      phone_number: clientData.contact_phone || null // Guardar el número real del cliente
     });
 
     log(`✅ Sesión creada: ${session.session_name}`);
+
+    // Crear configuración inicial del cliente con bot desactivado por defecto
+    const db = getPrisma();
+    try {
+      await db.clientConfig.upsert({
+        where: { client_id: client.id },
+        update: {}, // No actualizar si ya existe
+        create: {
+          client_id: client.id,
+          bot_enabled: false // Bot desactivado por defecto - el cliente debe activarlo manualmente
+        }
+      });
+      log(`✅ Configuración inicial creada para cliente ${client.id} (bot desactivado)`);
+    } catch (configError) {
+      log(`⚠️ Error creando configuración inicial (puede que ya exista): ${configError?.message || configError}`);
+    }
 
     // Construir URL del QR
     const port = process.env.PORT || 3000;

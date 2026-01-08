@@ -1,6 +1,8 @@
 // Gestión de vista previa y confirmación
-import { ConfigStep } from '../index.js';
-import { getCurrentOption, getCurrentLabel } from '../data/configDataManager.js';
+import { ConfigStep } from '../constants.js';
+import { getSession, updateSession } from '../sessionManager.js';
+import { getCurrentOption, getCurrentLabel } from '../utils/dataManager.js';
+import { buildResponse } from '../utils/responseBuilder.js';
 
 /**
  * Muestra una vista previa del menú configurado
@@ -9,54 +11,31 @@ import { getCurrentOption, getCurrentLabel } from '../data/configDataManager.js'
  * @returns {Promise<Object>} Respuesta con vista previa
  */
 export async function showPreview(clientId, sessionId) {
-  // Importar dinámicamente para evitar dependencias circulares
-  const { getConfigurationSession } = await import('../index.js');
-  const configSession = getConfigurationSession(clientId);
+  const configSession = getSession(clientId);
   
   if (!configSession) {
-    return { response: null, completed: false, cancelled: false };
+    return buildResponse(clientId, null, false, false);
   }
   
   const welcome = configSession.data.welcome_message || 'No configurado';
-  const label1 = getCurrentLabel(configSession.data, '1') || 'Opción 1';
-  const label2 = getCurrentLabel(configSession.data, '2') || 'Opción 2';
-  const label3 = getCurrentLabel(configSession.data, '3') || 'Opción 3';
-  const label4 = getCurrentLabel(configSession.data, '4') || 'Opción 4';
+  const options = configSession.data.options || [];
   
-  const option1 = getCurrentOption(configSession.data, '1') || 'No configurado';
-  const option2 = getCurrentOption(configSession.data, '2') || 'No configurado';
-  const option3 = getCurrentOption(configSession.data, '3') || 'No configurado';
-  const option4 = getCurrentOption(configSession.data, '4') || 'No configurado';
+  let preview = `👁️ *Vista Previa del Menú*\n\n📝 *Mensaje de Bienvenida:*\n${welcome !== 'No configurado' ? welcome.substring(0, 200) + (welcome.length > 200 ? '...' : '') : 'No configurado'}\n\n`;
   
-  const preview = `👁️ *Vista Previa del Menú*
-
-📝 *Mensaje de Bienvenida:*
-${welcome.substring(0, 150)}${welcome.length > 150 ? '...' : ''}
-
-📋 *Opciones del Menú:*
-
-*1️⃣ ${label1}:*
-${option1.substring(0, 100)}${option1.length > 100 ? '...' : ''}
-
-*2️⃣ ${label2}:*
-${option2.substring(0, 100)}${option2.length > 100 ? '...' : ''}
-
-*3️⃣ ${label3}:*
-${option3.substring(0, 100)}${option3.length > 100 ? '...' : ''}
-
-*4️⃣ ${label4}:*
-${option4.substring(0, 100)}${option4.length > 100 ? '...' : ''}
-
-💡 *Comandos:*
-• Continúa escribiendo para seguir configurando
-• 'editar [1-4]' - Editar una opción específica
-• 'cancelar' - Salir sin guardar`;
+  if (options.length > 0) {
+    preview += `📋 *Opciones del Menú:*\n\n`;
+    options.forEach(option => {
+      const label = option.label || `Opción ${option.key}`;
+      const response = option.response || 'Sin respuesta configurada';
+      preview += `${option.key}️⃣ *${label}*\n${response.substring(0, 100)}${response.length > 100 ? '...' : ''}\n\n`;
+    });
+  } else {
+    preview += `📋 *Opciones:*\n⚠️ No configuradas\n\n`;
+  }
   
-  return {
-    response: preview,
-    completed: false,
-    cancelled: false
-  };
+  preview += `💡 *Comandos:*\n• Escribe cualquier número para volver al menú\n• 'cancelar' - Salir sin guardar\n• '0' - Resetear todo`;
+  
+  return buildResponse(clientId, preview, false, false);
 }
 
 /**
@@ -66,24 +45,20 @@ ${option4.substring(0, 100)}${option4.length > 100 ? '...' : ''}
  * @returns {Promise<Object>} Respuesta con confirmación
  */
 export async function showPreviewAndConfirm(clientId, sessionId) {
-  // Importar dinámicamente para evitar dependencias circulares
-  const { getConfigurationSession } = await import('../index.js');
-  const configSession = getConfigurationSession(clientId);
+  const configSession = getSession(clientId);
   
   if (!configSession) {
-    return { response: null, completed: false, cancelled: false };
+    return buildResponse(clientId, null, false, false);
   }
   
   // Cambiar a modo de confirmación
-  configSession.step = ConfigStep.COMPLETED;
-  configSession.waitingConfirmation = true;
+  updateSession(clientId, {
+    step: ConfigStep.COMPLETED,
+    waitingConfirmation: true
+  });
   
   const preview = await showPreview(clientId, sessionId);
   
-  return {
-    response: `${preview.response}\n\n✅ *¿Guardar esta configuración?*\n\nEscribe 'guardar' o 'si' para confirmar, o 'cancelar' para salir sin guardar.`,
-    completed: false,
-    cancelled: false
-  };
+  return buildResponse(clientId, `${preview.response}\n\n✅ *¿Guardar esta configuración?*\n\nEscribe 'guardar' o 'si' para confirmar, o 'cancelar' para salir sin guardar.`, false, false);
 }
 
