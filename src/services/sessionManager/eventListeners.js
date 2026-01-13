@@ -24,7 +24,7 @@ export async function setupEventListeners(client, sessionId, sessionPath, sessio
   }
   
   // Configurar listeners por tipo
-  setupAuthListeners(client, sessionId, sessionData, ensureInit);
+  setupAuthListeners(client, sessionId, sessionData, ensureInit, sessionPath);
   setupReadyListener(client, sessionId, sessionPath, sessionData);
   setupQRListener(client, sessionId, sessionPath, sessionData);
   setupMessageListeners(client, sessionId);

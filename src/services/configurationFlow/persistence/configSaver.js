@@ -93,7 +93,8 @@ export async function completeConfiguration(clientId, sessionId) {
       
       await updateClientConfig(clientSessionId, {
         welcome_message: configSession.data.welcome_message,
-        menu_options: menuOptions
+        menu_options: menuOptions,
+        excluded_numbers: configSession.data.excluded_numbers || []
       });
       
       // Limpiar cache
@@ -122,7 +123,9 @@ export async function completeConfiguration(clientId, sessionId) {
 
 🎉 Los cambios se aplicarán inmediatamente. Puedes probar enviando un mensaje a tu bot.
 
-💡 Escribe "configurar" nuevamente si quieres modificar algo.`;
+💡 Escribe "configurar" nuevamente si quieres modificar algo.
+
+💡 Escribe "menu" si quieres volver al menu principal.`;
   
   return {
     response: summary,

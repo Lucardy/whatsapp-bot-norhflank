@@ -76,5 +76,6 @@ export function getCurrentLabel(data, key) {
 export function resetConfigData(data) {
   data.welcome_message = null;
   data.options = [];
+  data.excluded_numbers = [];
 }
 

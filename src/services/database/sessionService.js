@@ -1,6 +1,8 @@
 // Servicio para operaciones de sesiones de WhatsApp
-import { getPrisma } from '../../config/database.js';
+// NOTA: Este servicio ahora usa los repositorios para abstraer las queries
+import * as sessionRepository from '../../repositories/sessionRepository.js';
 import { logSession } from '../../utils/logger/index.js';
+import { getPrisma } from '../../config/database.js';
 
 /**
  * Obtiene una sesión por su nombre
@@ -8,18 +10,7 @@ import { logSession } from '../../utils/logger/index.js';
  * @returns {Promise<Object|null>} Sesión o null si no existe
  */
 export async function getSessionByName(sessionName) {
-  try {
-    const db = getPrisma();
-    return await db.whatsAppSession.findUnique({
-      where: { session_name: sessionName },
-      include: {
-        client: true
-      }
-    });
-  } catch (error) {
-    logSession(sessionName, '⚠️ Error obteniendo sesión:', error?.message || error);
-    return null;
-  }
+  return await sessionRepository.getSessionByName(sessionName);
 }
 
 /**
@@ -28,16 +19,7 @@ export async function getSessionByName(sessionName) {
  * @returns {Promise<string|null>} Tipo de sesión o null
  */
 export async function getSessionType(sessionName) {
-  try {
-    const db = getPrisma();
-    const session = await db.whatsAppSession.findUnique({
-      where: { session_name: sessionName },
-      select: { session_type: true }
-    });
-    return session?.session_type || null;
-  } catch (error) {
-    return null;
-  }
+  return await sessionRepository.getSessionType(sessionName);
 }
 
 /**
@@ -46,18 +28,7 @@ export async function getSessionType(sessionName) {
  * @returns {Promise<Array>} Array de sesiones
  */
 export async function getSessionsByType(sessionType) {
-  try {
-    const db = getPrisma();
-    return await db.whatsAppSession.findMany({
-      where: { session_type: sessionType },
-      include: {
-        client: true
-      }
-    });
-  } catch (error) {
-    logSession('system', `⚠️ Error obteniendo sesiones por tipo: ${error?.message || error}`);
-    return [];
-  }
+  return await sessionRepository.getSessionsByType(sessionType);
 }
 
 /**
@@ -68,14 +39,24 @@ export async function getSessionsByType(sessionType) {
  */
 export async function updateSessionPhone(sessionName, phoneNumber) {
   try {
+    // Validar que el número sea un número real, no un ID largo de WhatsApp
+    const { PHONE_VALIDATION_PATTERN } = await import('../../config/constants.js');
+    const cleanPhone = phoneNumber ? phoneNumber.replace(/[^0-9]/g, '') : '';
+    
+    if (!cleanPhone || !PHONE_VALIDATION_PATTERN.test(cleanPhone)) {
+      logSession(sessionName, `⚠️ Número inválido o ID largo detectado (${phoneNumber}), no se actualizará`);
+      return false;
+    }
+
     const db = getPrisma();
     await db.whatsAppSession.update({
       where: { session_name: sessionName },
       data: { 
-        phone_number: phoneNumber,
+        phone_number: cleanPhone,
         status: 'connected'
       }
     });
+    logSession(sessionName, `✅ Número de teléfono actualizado: ${cleanPhone}`);
     return true;
   } catch (error) {
     logSession(sessionName, '⚠️ Error actualizando número de teléfono:', error?.message || error);
@@ -109,15 +90,7 @@ export async function updateSessionStatus(sessionName, status) {
  * @returns {Promise<Object|null>} Sesión creada o null si hubo error
  */
 export async function createSession(sessionData) {
-  try {
-    const db = getPrisma();
-    return await db.whatsAppSession.create({
-      data: sessionData
-    });
-  } catch (error) {
-    logSession(sessionData.session_name || 'unknown', '⚠️ Error creando sesión:', error?.message || error);
-    return null;
-  }
+  return await sessionRepository.createSession(sessionData);
 }
 
 /**
@@ -127,22 +100,12 @@ export async function createSession(sessionData) {
  * @returns {Promise<Object|null>} Sesión o null si no existe
  */
 export async function getSessionByClientId(clientId, sessionType = null) {
-  try {
-    const db = getPrisma();
-    const where = { client_id: clientId };
-    if (sessionType) {
-      where.session_type = sessionType;
-    }
-    return await db.whatsAppSession.findFirst({
-      where,
-      include: {
-        client: true
-      }
-    });
-  } catch (error) {
-    logSession(`client_${clientId}`, '⚠️ Error obteniendo sesión:', error?.message || error);
-    return null;
+  if (sessionType) {
+    // Si se especifica tipo, buscar manualmente
+    const sessions = await sessionRepository.getSessionsByType(sessionType);
+    return sessions.find(s => s.client_id === clientId) || null;
   }
+  return await sessionRepository.getSessionByClientId(clientId);
 }
 
 /**

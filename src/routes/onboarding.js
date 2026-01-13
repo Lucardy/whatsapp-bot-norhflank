@@ -5,6 +5,7 @@ import { createClientWithSession, getOnboardingInfo, activateClient } from '../s
 import { getSessionByName } from '../services/database/sessionService.js';
 import { ValidationError } from '../utils/errors.js';
 import { renderInvalidClientId, renderClientNotFound, renderError, renderOnboardingPanel } from './views/onboardingView.js';
+import { strictLimiter } from '../middleware/rateLimit.js';
 
 /**
  * Configura las rutas de onboarding
@@ -14,8 +15,8 @@ import { renderInvalidClientId, renderClientNotFound, renderError, renderOnboard
 export function setupOnboardingRoutes(app, sessionManager) {
   const router = express.Router();
 
-  // POST /api/clients - Crear nuevo cliente
-  router.post('/clients', async (req, res) => {
+  // POST /api/clients - Crear nuevo cliente (con rate limiting estricto)
+  router.post('/clients', strictLimiter, async (req, res) => {
     try {
       const { name, contact_email, contact_phone, plan_id, session_name } = req.body;
 

@@ -32,9 +32,7 @@ export async function showPreview(clientId, sessionId) {
   } else {
     preview += `📋 *Opciones:*\n⚠️ No configuradas\n\n`;
   }
-  
-  preview += `💡 *Comandos:*\n• Escribe cualquier número para volver al menú\n• 'cancelar' - Salir sin guardar\n• '0' - Resetear todo`;
-  
+
   return buildResponse(clientId, preview, false, false);
 }
 

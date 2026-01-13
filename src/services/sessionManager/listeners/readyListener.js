@@ -1,9 +1,6 @@
 // Listener para el evento 'ready' de WhatsApp
 import path from 'path';
 import { logSession } from '../../../utils/logger/index.js';
-import { setSessionReadyTime } from '../../messageHandler/index.js';
-import { captureAndSavePhoneNumber } from '../phoneCapture.js';
-import { markSessionReady } from '../stateManager.js';
 
 /**
  * Configura el listener para el evento 'ready'
@@ -13,26 +10,68 @@ import { markSessionReady } from '../stateManager.js';
  * @param {Object} sessionData - Datos de la sesión
  */
 export function setupReadyListener(client, sessionId, sessionPath, sessionData) {
+  logSession(sessionId, '📝 Listener de "ready" registrado');
   client.once('ready', async () => {
-    const readyTime = Date.now();
-    markSessionReady(sessionData, sessionId, readyTime);
-    setSessionReadyTime(sessionId, readyTime); // Registrar en messageHandler para filtrar mensajes antiguos
-    
-    // Capturar número de teléfono del WhatsApp conectado
-    await captureAndSavePhoneNumber(client, sessionId, sessionData);
+    logSession(sessionId, '🎉 EVENTO READY RECIBIDO - Sesión completamente conectada');
     
     // Si forceQR está activo, mantener el QR disponible por un tiempo
     // Esto permite que el usuario pueda escanearlo incluso si se conectó rápido
-    if (!sessionData.forceQR) {
-      sessionData.lastQRDataURL = null;
-    }
+    const clearQR = !sessionData.forceQR;
+    
+    const readyTime = Date.now();
+    const { markSessionAsReady } = await import('../stateManager.js');
+    await markSessionAsReady(client, sessionData, sessionId, readyTime, {
+      clearQR,
+      context: 'ready'
+    });
+    
     const s = await client.getState().catch(() => 'NO_STATE');
     logSession(sessionId, '✅ BOT IS READY | state =', s);
-    logSession(sessionId, '🎯 Listener de mensajes registrado y activo');
-    logSession(sessionId, '📬 El bot está listo para recibir mensajes');
-    logSession(sessionId, `💾 Sesión guardada en: ${path.join(sessionPath, '.wwebjs_auth')}`);
-    logSession(sessionId, '✅ La sesión quedará guardada permanentemente - no necesitarás escanear QR nuevamente');
     logSession(sessionId, `⏰ Ignorando mensajes anteriores a ${new Date(readyTime).toISOString()} para evitar respuestas a mensajes antiguos`);
+    
+    // Verificar que la sesión se haya guardado correctamente
+    // LocalAuth guarda la sesión de forma asíncrona después del evento 'ready'
+    // Puede tardar varios segundos, así que verificamos múltiples veces
+    const checkSessionSaved = async (attempt = 1, maxAttempts = 3) => {
+      const authPath = path.join(sessionPath, '.wwebjs_auth');
+      const fs = await import('fs');
+      
+      // Verificar si existe el directorio .wwebjs_auth
+      let sessionSaved = fs.existsSync(authPath);
+      
+      // Si no existe como directorio, verificar si hay archivos de sesión en subdirectorios
+      if (!sessionSaved && fs.existsSync(sessionPath)) {
+        try {
+          const files = fs.readdirSync(sessionPath, { withFileTypes: true });
+          // Buscar cualquier carpeta que contenga "auth" o "wwebjs" (case insensitive)
+          sessionSaved = files.some(file => {
+            const name = file.name.toLowerCase();
+            return file.isDirectory() && (name.includes('auth') || name.includes('wwebjs'));
+          });
+        } catch (err) {
+          // Ignorar errores de lectura
+        }
+      }
+      
+      if (sessionSaved) {
+        logSession(sessionId, `✅ Sesión guardada correctamente en: ${authPath}`);
+        logSession(sessionId, '✅ La sesión quedará guardada permanentemente - no necesitarás escanear QR nuevamente');
+      } else if (attempt < maxAttempts) {
+        // Reintentar después de más tiempo (5, 10, 15 segundos)
+        const delay = attempt * 5000;
+        setTimeout(() => checkSessionSaved(attempt + 1, maxAttempts), delay);
+      } else {
+        // Después de todos los intentos, asumir que la sesión se guardó si el cliente está conectado
+        // LocalAuth puede guardar la sesión de forma interna y no crear la carpeta inmediatamente
+        logSession(sessionId, `💡 Verificación de carpeta .wwebjs_auth completada`);
+        logSession(sessionId, `   La sesión se guarda automáticamente por LocalAuth`);
+        logSession(sessionId, `   Si el bot se reconecta automáticamente al reiniciar (sin pedir QR), la sesión está guardada correctamente`);
+        logSession(sessionId, `   Ubicación esperada: ${authPath}`);
+      }
+    };
+    
+    // Empezar a verificar después de 5 segundos (dar más tiempo a LocalAuth)
+    setTimeout(() => checkSessionSaved(1, 3), 5000);
     
     // Si forceQR está activo, limpiarlo después de 30 segundos (tiempo suficiente para escanear)
     if (sessionData.forceQR) {

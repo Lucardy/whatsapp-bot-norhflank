@@ -48,7 +48,7 @@ export async function handleClientMenuOption(msg, clientId, sessionId, texto) {
     ? ((msg.to || msg.from || '').split('@')[0] || '')
     : ((msg.from || '').split('@')[0] || '');
   
-  // Opción 0: Salir del menú
+  // Opción 0: Salir del menú (siempre permitida)
   if (textoLower === '0' || textoLower === 'salir' || textoLower === 'exit') {
     exitClientMenu(clientId);
     try {
@@ -56,6 +56,26 @@ export async function handleClientMenuOption(msg, clientId, sessionId, texto) {
       logSession(sessionId, `✅ Cliente ${clientId} salió del menú`);
     } catch (err) {
       logSession(sessionId, `❌ Error enviando mensaje de salida: ${err?.message || err}`);
+    }
+    return true;
+  }
+  
+  // Verificar si el cliente está bloqueado (suspendido o trial expirado)
+  // Si está bloqueado, solo permitir salir (opción 0), bloquear todas las demás opciones
+  const { getClientById } = await import('../database/clientService.js');
+  const client = await getClientById(clientId);
+  const { isClientBlocked } = await import('./clientMenuService.js');
+  const blocked = await isClientBlocked(client);
+  
+  if (blocked) {
+    // Cliente bloqueado: solo mostrar mensaje de pago y permitir salir
+    try {
+      const { showClientMenu } = await import('./clientMenuService.js');
+      const menuMessage = await showClientMenu(clientId, sessionId);
+      await sendBotMessage(msg, sessionId, chatId, `🚫 *Acceso restringido*\n\n${menuMessage}`);
+      logSession(sessionId, `⚠️ Cliente ${clientId} intentó acceder a opción del menú pero está bloqueado`);
+    } catch (err) {
+      logSession(sessionId, `❌ Error mostrando mensaje de bloqueo: ${err?.message || err}`);
     }
     return true;
   }
@@ -76,11 +96,52 @@ export async function handleClientMenuOption(msg, clientId, sessionId, texto) {
   // Opción 2: Activar/Desactivar bot
   if (textoLower === '2' || textoLower === 'activar' || textoLower === 'desactivar' || textoLower === 'toggle') {
     try {
+      // Verificar estado de la cuenta antes de permitir activar
+      const { getClientById } = await import('../database/clientService.js');
+      const client = await getClientById(clientId);
+      
+      if (!client) {
+        await sendBotMessage(msg, sessionId, chatId, '❌ *Error*\n\nNo se pudo encontrar tu cuenta. Por favor, contacta con soporte.');
+        return true;
+      }
+      
+      // Si está suspendido o el trial expiró, no permitir activar
+      if (client.status === 'suspended') {
+        await sendBotMessage(msg, sessionId, chatId, `🚫 *No se puede activar el bot*
+
+Tu período de prueba ha finalizado y tu cuenta está suspendida.
+
+💳 *Para continuar usando el bot, necesitas activar una suscripción.*
+
+📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.`);
+        logSession(sessionId, `⚠️ Cliente ${clientId} intentó activar bot pero está suspendido`);
+        return true;
+      }
+      
+      // Si está en trial pero ya expiró (días restantes <= 0)
+      if (client.status === 'trial') {
+        const { getTrialDaysRemaining } = await import('../subscription/subscriptionService.js');
+        const daysRemaining = getTrialDaysRemaining(client.created_at);
+        
+        if (daysRemaining <= 0) {
+          await sendBotMessage(msg, sessionId, chatId, `🚫 *No se puede activar el bot*
+
+Tu período de prueba ha finalizado.
+
+💳 *Para continuar usando el bot, necesitas activar una suscripción.*
+
+📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.`);
+          logSession(sessionId, `⚠️ Cliente ${clientId} intentó activar bot pero el trial expiró (${daysRemaining} días restantes)`);
+          return true;
+        }
+      }
+      
       // Obtener estado actual
       const { isBotEnabled } = await import('./clientMenuService.js');
       const currentStatus = await isBotEnabled(clientId, sessionId);
       const newStatus = !currentStatus;
       
+      // toggleBot ya tiene validaciones internas, pero las verificamos aquí también para dar feedback inmediato
       const message = await toggleBot(clientId, newStatus, sessionId);
       await sendBotMessage(msg, sessionId, chatId, message);
       logSession(sessionId, `✅ Bot ${newStatus ? 'activado' : 'desactivado'} para cliente ${clientId}`);
@@ -133,6 +194,37 @@ export async function handleClientMenuOption(msg, clientId, sessionId, texto) {
       exitClientMenu(clientId); // Salir del menú para entrar en modo test
     } catch (err) {
       logSession(sessionId, `❌ Error activando modo test: ${err?.message || err}`);
+    }
+    return true;
+  }
+  
+  // Opción 6: Estadísticas
+  if (textoLower === '6' || textoLower === 'estadísticas' || textoLower === 'estadisticas' || textoLower === 'stats' || textoLower === 'métricas' || textoLower === 'metricas') {
+    try {
+      const { handleStatisticsRequest } = await import('./statisticsHandler.js');
+      await handleStatisticsRequest(msg, clientId, sessionId);
+      logSession(sessionId, `✅ Estadísticas mostradas para cliente ${clientId}`);
+      // No mostrar el menú automáticamente, el usuario puede escribir "menú" si lo necesita
+    } catch (err) {
+      logSession(sessionId, `❌ Error mostrando estadísticas: ${err?.message || err}`);
+    }
+    return true;
+  }
+  
+  // Edición rápida de opciones: formato "editar 1 label" o "editar 1 respuesta"
+  // También acepta "editar opción 1" o "cambiar 1"
+  const quickEditMatch = textoLower.match(/^(editar|editar opción|cambiar|modificar)\s+(\d+)\s+(label|etiqueta|respuesta|response)$/);
+  if (quickEditMatch) {
+    const optionKey = quickEditMatch[2];
+    const editType = quickEditMatch[3] === 'label' || quickEditMatch[3] === 'etiqueta' ? 'label' : 'response';
+    try {
+      const { startQuickEdit } = await import('../configurationFlow/handlers/quickEditHandler.js');
+      const editMessage = await startQuickEdit(clientId, optionKey, editType, sessionId);
+      await sendBotMessage(msg, sessionId, chatId, editMessage);
+      exitClientMenu(clientId); // Salir del menú para entrar en modo edición rápida
+      logSession(sessionId, `⚡ Edición rápida iniciada para opción ${optionKey} del cliente ${clientId}`);
+    } catch (err) {
+      logSession(sessionId, `❌ Error iniciando edición rápida: ${err?.message || err}`);
     }
     return true;
   }

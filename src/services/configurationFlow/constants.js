@@ -7,6 +7,7 @@ export const ConfigStep = {
   WELCOME: 'configuring_welcome',
   OPTION_LABEL: 'configuring_option_label',
   OPTION_RESPONSE: 'configuring_option_response',
+  EXCLUDED_NUMBERS: 'configuring_excluded_numbers', // Gestionar números de excepción
   RESETTING: 'resetting',
   COMPLETED: 'completed'
 };

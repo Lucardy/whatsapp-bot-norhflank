@@ -8,9 +8,10 @@ import { ensureSessionForClient } from './sessionHelpers.js';
  * @param {string} phoneNumber - Número de teléfono
  * @param {string} sessionId - ID de la sesión para logging
  * @param {Object} sessionManager - Instancia del SessionManager (opcional)
+ * @param {string} chatId - ID del chat (opcional, necesario para crear la sesión de trial)
  * @returns {Promise<Object|null>} { message: string, hasPendingSession: boolean, sessionName: string|null, qrDataURL: string|null } o null
  */
-export async function findExistingClient(phoneNumber, sessionId, sessionManager = null) {
+export async function findExistingClient(phoneNumber, sessionId, sessionManager = null, chatId = null) {
   const existingClient = await findClientByPhone(phoneNumber);
   
   if (!existingClient) {
@@ -174,13 +175,38 @@ export async function findExistingClient(phoneNumber, sessionId, sessionManager 
   }
   
   const { buildExistingClientMessage } = await import('./messageBuilder.js');
+  const { TrialStep, trialSessions } = await import('./constants.js');
+  
+  // En lugar de retornar el QR inmediatamente, iniciar un mini-flujo de trial
+  // que solo pregunta a dónde enviar el QR (similar al paso QR_PHONE del flujo normal)
+  // IMPORTANTE: Usar chatId como clave si está disponible, sino usar phoneNumber como fallback
+  const trialSessionKey = chatId || phoneNumber;
+  logSession(sessionId, `📝 Creando trial session con clave: "${trialSessionKey}" (chatId: ${chatId || 'N/A'}, phoneNumber: ${phoneNumber})`);
+  trialSessions.set(trialSessionKey, {
+    step: TrialStep.QR_PHONE,
+    phoneNumber: phoneNumber, // Guardar el chatId como phoneNumber para este flujo
+    sessionId,
+    data: {
+      name: existingClient.name, // Ya tenemos el nombre
+      email: existingClient.contact_email || null,
+      qrPhoneNumber: null, // Se llenará cuando el usuario responda
+      isExistingClient: true, // Flag especial para identificar que es cliente existente
+      existingClientId: existingClient.id, // Guardar el ID del cliente existente
+      sessionName: session?.session_name || null, // Guardar el nombre de la sesión
+      originalMessage: null
+    },
+    startedAt: Date.now()
+  });
+  
+  logSession(sessionId, `📝 Trial session creada para cliente existente: ${existingClient.name} (ID: ${existingClient.id})`);
   
   return {
-    message: buildExistingClientMessage(existingClient, null), // No usar pairing code, usar QR
+    message: buildExistingClientMessage(existingClient, null), // Preguntar a dónde enviar el QR
     hasPendingSession: true,
     sessionName: session?.session_name || null,
-    qrDataURL: qrDataURL,
-    pairingCode: null
+    qrDataURL: null, // NO enviar QR inmediatamente, esperar a que el usuario elija
+    pairingCode: null,
+    isExistingClient: true // Flag para indicar que es cliente existente
   };
 }
 

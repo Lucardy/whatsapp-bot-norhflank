@@ -1,5 +1,6 @@
 // Rutas relacionadas con sesiones
 import { log } from '../../utils/logger/index.js';
+import { strictLimiter } from '../../middleware/rateLimit.js';
 
 /**
  * Configura las rutas de sesiones
@@ -66,8 +67,8 @@ export function setupSessionRoutes(app, sessionManager, sessionsConfig) {
     }
   });
 
-  // Reiniciar una sesión específica
-  app.post('/restart/:sessionId', async (req, res) => {
+  // Reiniciar una sesión específica (con rate limiting estricto)
+  app.post('/restart/:sessionId', strictLimiter, async (req, res) => {
     try {
       const { sessionId } = req.params;
       const sessionData = sessionManager.getSession(sessionId);
@@ -89,8 +90,8 @@ export function setupSessionRoutes(app, sessionManager, sessionsConfig) {
     }
   });
 
-  // Reiniciar todas las sesiones (compatibilidad hacia atrás)
-  app.post('/restart', async (req, res) => {
+  // Reiniciar todas las sesiones (compatibilidad hacia atrás, con rate limiting estricto)
+  app.post('/restart', strictLimiter, async (req, res) => {
     try {
       log('♻️ Reiniciando todas las sesiones…');
       for (const sessionId of sessionsConfig) {
@@ -114,8 +115,8 @@ export function setupSessionRoutes(app, sessionManager, sessionsConfig) {
   // GESTIÓN DINÁMICA DE SESIONES (mientras el bot está corriendo)
   // ============================================
 
-  // Agregar nueva sesión dinámicamente
-  app.post('/sessions/:sessionId', async (req, res) => {
+  // Agregar nueva sesión dinámicamente (con rate limiting estricto)
+  app.post('/sessions/:sessionId', strictLimiter, async (req, res) => {
     const { sessionId } = req.params;
     
     try {
@@ -154,8 +155,8 @@ export function setupSessionRoutes(app, sessionManager, sessionsConfig) {
     }
   });
 
-  // Eliminar sesión dinámicamente
-  app.delete('/sessions/:sessionId', async (req, res) => {
+  // Eliminar sesión dinámicamente (con rate limiting estricto)
+  app.delete('/sessions/:sessionId', strictLimiter, async (req, res) => {
     const { sessionId } = req.params;
     const { deleteAuth = false } = req.query; // ?deleteAuth=true para eliminar también la autenticación
     
@@ -183,8 +184,8 @@ export function setupSessionRoutes(app, sessionManager, sessionsConfig) {
     }
   });
 
-  // Resetear sesión (eliminar autenticación y forzar nuevo QR)
-  app.post('/sessions/:sessionId/reset', async (req, res) => {
+  // Resetear sesión (eliminar autenticación y forzar nuevo QR, con rate limiting estricto)
+  app.post('/sessions/:sessionId/reset', strictLimiter, async (req, res) => {
     const { sessionId } = req.params;
     
     try {
@@ -204,8 +205,8 @@ export function setupSessionRoutes(app, sessionManager, sessionsConfig) {
     }
   });
 
-  // Reconectar sesión (reiniciar sin eliminar autenticación)
-  app.post('/sessions/:sessionId/reconnect', async (req, res) => {
+  // Reconectar sesión (reiniciar sin eliminar autenticación, con rate limiting estricto)
+  app.post('/sessions/:sessionId/reconnect', strictLimiter, async (req, res) => {
     const { sessionId } = req.params;
     
     try {

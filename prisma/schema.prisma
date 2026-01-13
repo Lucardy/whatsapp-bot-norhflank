@@ -31,6 +31,9 @@ model Client {
   contact_email       String?
   status              String   @default("trial") // trial, active, suspended, cancelled
   plan_id             Int?
+  expires_at          DateTime? // Fecha de vencimiento de la suscripción (null = sin vencimiento)
+  mp_payment_id       String?  // ID del último pago de Mercado Pago
+  last_payment_date   DateTime? // Fecha del último pago
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt
   
@@ -39,6 +42,8 @@ model Client {
   config              ClientConfig?
   
   @@map("clients")
+  @@index([expires_at])
+  @@index([status])
 }
 
 // Sesiones de WhatsApp
@@ -70,6 +75,7 @@ model ClientConfig {
   welcome_message     String?  // Mensaje de bienvenida
   menu_options        Json?    // Opciones del menú en JSON
   auto_responses      Json?    // Respuestas automáticas personalizadas
+  excluded_numbers     Json?    // Lista de números de teléfono excluidos (array de strings) - el bot no responderá a estos números
   bot_enabled         Boolean  @default(false) // Si el bot está activo o no (inicia desactivado)
   created_at          DateTime @default(now())
   updated_at          DateTime @updatedAt

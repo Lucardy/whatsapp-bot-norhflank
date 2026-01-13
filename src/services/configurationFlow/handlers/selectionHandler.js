@@ -66,9 +66,58 @@ Envía el mensaje que quieres que aparezca cuando alguien escriba por primera ve
   // PRIORIDAD 2: Opciones numéricas 2 en adelante (para preguntas y respuestas)
   const optionNumber = parseInt(messageLower);
   
+  // Calcular el número de opción para "Números de Excepción"
+  // Estructura del menú:
+  // 1: Mensaje de bienvenida
+  // 2 a (optionCount+1): Preguntas y respuestas existentes
+  // (optionCount+2): Agregar nueva opción (si hay espacio)
+  // (último número): Números de excepción
+  let excludedNumbersOptionNumber;
+  if (optionCount < MAX_OPTIONS) {
+    // Hay espacio para agregar opciones: está después de "Agregar nueva opción"
+    excludedNumbersOptionNumber = optionCount + 3; // +1 por bienvenida, +1 por última opción, +1 por agregar nueva
+  } else {
+    // No hay espacio: está después de la última opción
+    excludedNumbersOptionNumber = optionCount + 2; // +1 por bienvenida, +1 por última opción
+  }
+  
+  // Si seleccionó la opción de números de excepción
+  if (optionNumber === excludedNumbersOptionNumber) {
+    const { updateSession } = await import('../sessionManager.js');
+    const { ConfigStep } = await import('../constants.js');
+    updateSession(clientId, { step: ConfigStep.EXCLUDED_NUMBERS });
+    
+    const excludedCount = configSession.data.excluded_numbers?.length || 0;
+    let message = `🚫 *Números de Excepción*\n\n`;
+    message += `Los números que agregues aquí NO recibirán respuestas automáticas del bot.\n\n`;
+    
+    if (excludedCount > 0) {
+      message += `📋 *Números excluidos actualmente:* ${excludedCount}\n\n`;
+    } else {
+      message += `📋 *No hay números excluidos actualmente.*\n\n`;
+    }
+    
+    message += `💡 *Cómo usar:*\n`;
+    message += `• Escribe un número de teléfono para agregarlo o quitarlo\n`;
+    message += `• Escribe "listar" para ver todos los números excluidos\n`;
+    message += `• Escribe "limpiar" para eliminar todos\n`;
+    message += `• Escribe "volver" para regresar al menú\n\n`;
+    message += `📱 *Ejemplo:* 5491169956253 (sin espacios ni guiones)`;
+    
+    return buildResponse(clientId, message, false, false);
+  }
+  
   if (!isNaN(optionNumber) && optionNumber >= 2) {
     // Convertir número del menú a índice de opción (menú 2 = opción 1, menú 3 = opción 2, etc.)
+    // PERO ahora hay que considerar que la opción de números de excepción puede estar en el medio
     const targetOption = optionNumber - 1;
+    
+    // Si el número seleccionado es mayor que el número de opciones de excepción, ajustar
+    if (optionNumber > excludedNumbersOptionNumber) {
+      // El usuario seleccionó una opción después de "Números de Excepción", ajustar
+      // Esto no debería pasar normalmente, pero por seguridad
+      return buildResponse(clientId, `❓ Opción no válida.\n\n${generateSelectionMenu(configSession.data, sessionId)}`, false, false);
+    }
     
     if (targetOption > optionCount && targetOption <= MAX_OPTIONS) {
       // Agregar nueva opción

@@ -31,13 +31,17 @@ export function renderQRConnected(sessionId) {
       <meta charset="utf-8">
       <style>
         body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-        .success { color: #2e7d32; background: white; padding: 20px; border-radius: 8px; display: inline-block; }
+        .success { color: #2e7d32; background: white; padding: 30px; border-radius: 8px; display: inline-block; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .success h1 { margin-top: 0; }
+        .success a { color: #1976d2; text-decoration: none; font-weight: bold; }
+        .success a:hover { text-decoration: underline; }
       </style>
     </head>
     <body>
       <div class="success">
-        <h1>✅ Sesión "${sessionId}" ya está conectada</h1>
-        <p>No es necesario escanear el QR. La sesión está activa.</p>
+        <h1>✅ Sesión "${sessionId}" conectada</h1>
+        <p>🎉 ¡QR escaneado exitosamente!</p>
+        <p>La sesión está activa y guardada. No necesitarás escanear el QR nuevamente.</p>
         <p><a href="/state/${sessionId}">Ver estado de la sesión</a></p>
         <p><small>Si quieres cambiar el WhatsApp, resetea la sesión desde el menú.</small></p>
       </div>

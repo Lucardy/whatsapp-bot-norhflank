@@ -1,8 +1,7 @@
 // Handler para el mensaje de bienvenida
 import { logSession } from '../../../utils/logger/index.js';
-import { markBotSentMessage } from '../humanManager.js';
 import { markWelcomeSent } from '../conversationState.js';
-import { WELCOME_MESSAGE_DELAY, BOT_MESSAGE_REGISTER_DELAY } from '../../../config/constants.js';
+import { WELCOME_MESSAGE_DELAY } from '../../../config/constants.js';
 
 /**
  * Envía el mensaje de bienvenida en 2 partes

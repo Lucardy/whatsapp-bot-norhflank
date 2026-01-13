@@ -116,9 +116,13 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL, targetPhone
     logSession(sessionId, `📋 Cliente estado: conectado`);
     logSession(sessionId, `📤 Enviando QR como imagen a ${chatIdFull}...`);
     
-    // Marcar ANTES de enviar
+    // Marcar ANTES de enviar para evitar detección de acción humana
+    const { markBotSentMessage } = await import('../humanManager.js');
+    const { BOT_MESSAGE_REGISTER_DELAY } = await import('../../../config/constants.js');
     markBotSentMessage(sessionId, chatId);
     await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
+    // Nota: No podemos usar sendBotMessage aquí porque necesitamos usar msg.reply con media
+    // o client.sendMessage, no solo msg.reply con texto
     
     // Si se especificó un número diferente, usar client.sendMessage directamente
     // Si no, intentar usar msg.reply primero
@@ -129,7 +133,7 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL, targetPhone
       logSession(sessionId, `📤 Enviando QR a número específico usando client.sendMessage() con timeout de ${MESSAGE_SEND_TIMEOUT / 1000}s...`);
       try {
         const sendPromise = client.sendMessage(chatIdFull, media, {
-          caption: '📱 Escanea este QR con WhatsApp para activar tu bot'
+          caption: '📱 *Escanea este QR con WhatsApp para activar tu bot*\n\n⚠️ *Importante:* El QR expira en poco tiempo. Si tarda o da error al escanear, escribe *"qr"* para solicitar uno nuevo.'
         });
         
         const timeoutPromise = new Promise((_, reject) => {
@@ -149,7 +153,7 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL, targetPhone
       logSession(sessionId, `📤 Intentando enviar QR usando msg.reply() con timeout de ${MESSAGE_SEND_TIMEOUT / 1000}s...`);
       try {
         const sendPromise = msg.reply(media, null, {
-          caption: '📱 Escanea este QR con WhatsApp para activar tu bot'
+          caption: '📱 *Escanea este QR con WhatsApp para activar tu bot*\n\n⚠️ *Importante:* El QR expira en poco tiempo. Si tarda o da error al escanear, escribe *"qr"* para solicitar uno nuevo.'
         });
         
         const timeoutPromise = new Promise((_, reject) => {
@@ -210,9 +214,8 @@ export async function sendQRImage(msg, sessionId, chatId, qrDataURL, targetPhone
     
     // Si falla, intentar enviar un mensaje informativo
     try {
-      markBotSentMessage(sessionId, chatId);
-      await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
-      await msg.reply('⚠️ Hubo un problema al enviar el QR. Por favor, contacta con soporte.');
+      const { sendBotMessage } = await import('../humanManager.js');
+      await sendBotMessage(msg, sessionId, chatId, '⚠️ Hubo un problema al enviar el QR. Por favor, contacta con soporte.');
     } catch (err) {
       logSession(sessionId, `❌ Error enviando mensaje de error: ${err?.message || err}`);
     }

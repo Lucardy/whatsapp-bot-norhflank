@@ -111,13 +111,13 @@ export function validateOptionLabel(label, options = {}) {
 }
 
 /**
- * Valida un nombre de cliente
+ * Valida un nombre de cliente (debe ser un nombre "real")
  * @param {string} name - Nombre a validar
  * @param {Object} options - Opciones de validación
  * @throws {ValidationError} Si el nombre no es válido
  */
 export function validateClientName(name, options = {}) {
-  const { maxLength = 255, minLength = 2 } = options;
+  const { maxLength = 100, minLength = 2 } = options;
   
   if (!name || typeof name !== 'string') {
     throw new ValidationError('El nombre del cliente es requerido', 'name');
@@ -143,11 +143,56 @@ export function validateClientName(name, options = {}) {
     );
   }
   
-  // Validar que no sea solo espacios o caracteres especiales
-  const hasContent = /[a-zA-Z0-9]/.test(trimmed);
-  if (!hasContent) {
+  // Validar que tenga al menos 2 letras (no solo números o símbolos)
+  const letterCount = (trimmed.match(/[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/g) || []).length;
+  if (letterCount < 2) {
     throw new ValidationError(
-      'El nombre debe contener al menos una letra o número',
+      'El nombre debe contener al menos 2 letras. No se permiten solo números o símbolos.',
+      'name'
+    );
+  }
+  
+  // Validar que no sea solo números
+  const onlyNumbers = /^\d+$/.test(trimmed.replace(/[\s\-'\.]/g, ''));
+  if (onlyNumbers) {
+    throw new ValidationError(
+      'El nombre no puede ser solo números. Por favor, ingresa un nombre real.',
+      'name'
+    );
+  }
+  
+  // Validar que no sea solo símbolos (permitir espacios, guiones, apostrofes y puntos para nombres como "María José", "O'Connor", etc.)
+  const onlySymbols = /^[\s\-'\.]+$/.test(trimmed);
+  if (onlySymbols) {
+    throw new ValidationError(
+      'El nombre no puede ser solo símbolos. Por favor, ingresa un nombre real.',
+      'name'
+    );
+  }
+  
+  // Validar que tenga al menos una letra (ya validado arriba, pero por seguridad)
+  const hasLetters = /[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/.test(trimmed);
+  if (!hasLetters) {
+    throw new ValidationError(
+      'El nombre debe contener al menos una letra',
+      'name'
+    );
+  }
+  
+  // Validar que no tenga caracteres especiales raros (permitir letras, números, espacios, guiones, apostrofes, puntos y acentos)
+  const hasInvalidChars = /[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑüÜ\s\-'\.]/.test(trimmed);
+  if (hasInvalidChars) {
+    throw new ValidationError(
+      'El nombre contiene caracteres no permitidos. Solo se permiten letras, números, espacios, guiones, apostrofes y puntos.',
+      'name'
+    );
+  }
+  
+  // Validar que no tenga múltiples espacios consecutivos
+  const hasMultipleSpaces = /\s{2,}/.test(trimmed);
+  if (hasMultipleSpaces) {
+    throw new ValidationError(
+      'El nombre no puede tener múltiples espacios consecutivos',
       'name'
     );
   }

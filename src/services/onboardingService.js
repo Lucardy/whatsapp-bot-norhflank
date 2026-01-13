@@ -69,6 +69,16 @@ export async function createClientWithSession(clientData, sessionName = null) {
 
     log(`📝 Creando nuevo cliente: ${clientData.name}`);
 
+    // Verificar si el cliente ya existe por teléfono antes de crear
+    if (clientData.contact_phone) {
+      const { getClientByPhone } = await import('../repositories/clientRepository.js');
+      const existingClient = await getClientByPhone(clientData.contact_phone);
+      if (existingClient) {
+        log(`ℹ️ Cliente con teléfono ${clientData.contact_phone} ya existe: ${existingClient.name} (ID: ${existingClient.id})`);
+        throw new Error(`Unique constraint failed on the fields: (contact_phone)`);
+      }
+    }
+
     // Crear cliente en la base de datos
     const client = await createClient({
       name: clientData.name.trim(),
@@ -77,6 +87,10 @@ export async function createClientWithSession(clientData, sessionName = null) {
       status: 'trial', // Por defecto en período de prueba
       plan_id: clientData.plan_id || null
     });
+
+    if (!client) {
+      throw new Error('Error al crear cliente: createClient retornó null');
+    }
 
     log(`✅ Cliente creado con ID: ${client.id}`);
 

@@ -3,8 +3,8 @@
 export {
   getCachedConfig,
   setCachedConfig,
-  clearConfigCache,
+  clearCachedConfig as clearConfigCache,
   checkCooldown,
-  getLastMessageTime
+  getLastMessageTime,
+  updateLastMessageTime
 } from '../cache/index.js';
-

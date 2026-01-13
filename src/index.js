@@ -82,6 +82,12 @@ try {
 process.on('SIGTERM', async () => {
   clearInterval(heartbeatInterval);
   try {
+    const { stopSubscriptionScheduler } = await import('./services/subscription/subscriptionScheduler.js');
+    stopSubscriptionScheduler();
+  } catch (err) {
+    // Continuar si no está disponible
+  }
+  try {
     const { cleanupAllResources } = await import('./utils/resourceCleanup.js');
     cleanupAllResources();
   } catch (err) {
@@ -91,6 +97,12 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   clearInterval(heartbeatInterval);
+  try {
+    const { stopSubscriptionScheduler } = await import('./services/subscription/subscriptionScheduler.js');
+    stopSubscriptionScheduler();
+  } catch (err) {
+    // Continuar si no está disponible
+  }
   try {
     const { cleanupAllResources } = await import('./utils/resourceCleanup.js');
     cleanupAllResources();
@@ -188,6 +200,15 @@ async function start() {
 
   // Inicializar todas las sesiones
   await initializeAllSessions();
+  
+  // Iniciar scheduler de verificación de suscripciones (después de que las sesiones estén listas)
+  try {
+    const { startSubscriptionScheduler } = await import('./services/subscription/subscriptionScheduler.js');
+    startSubscriptionScheduler(true); // true = ejecutar verificación inmediatamente al iniciar
+    log('✅ Scheduler de suscripciones iniciado');
+  } catch (err) {
+    log(`⚠️ Error iniciando scheduler de suscripciones: ${err?.message || err}`);
+  }
   
   // Una vez que el bot está corriendo, mostrar información
   log('\n✅ Bot iniciado y funcionando');

@@ -38,6 +38,11 @@ export function generateSelectionMenu(data, sessionId) {
     menu += `${currentMenuNumber}️⃣ *Agregar Pregunta y Respuesta N°${optionCount + 1}*\n   (Nueva opción)\n\n`;
     currentMenuNumber++;
   }
+  
+  // Opción para gestionar números de excepción
+  const excludedCount = data.excluded_numbers?.length || 0;
+  const excludedStatus = excludedCount > 0 ? `(${excludedCount} número${excludedCount !== 1 ? 's' : ''})` : '';
+  menu += `${currentMenuNumber}️⃣ *Números de Excepción* ${excludedStatus}\n   Configurar números que el bot NO debe responder\n\n`;
 
   // "Guardar y salir" sin número, solo texto
   menu += `💾 *Guardar y salir*

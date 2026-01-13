@@ -1,5 +1,6 @@
 // Servicio para operaciones de clientes
-import { getPrisma } from '../../config/database.js';
+// NOTA: Este servicio ahora usa los repositorios para abstraer las queries
+import * as clientRepository from '../../repositories/clientRepository.js';
 import { logSession } from '../../utils/logger/index.js';
 
 /**
@@ -8,36 +9,17 @@ import { logSession } from '../../utils/logger/index.js';
  * @returns {Promise<Object|null>} Cliente o null si no existe
  */
 export async function getClientByName(clientName) {
-  try {
-    const db = getPrisma();
-    return await db.client.findFirst({
-      where: { name: clientName },
-      include: {
-        config: true,
-        sessions: true
-      }
-    });
-  } catch (error) {
-    logSession(clientName, '⚠️ Error obteniendo cliente:', error?.message || error);
-    return null;
-  }
+  return await clientRepository.getClientByName(clientName);
 }
 
 /**
  * Crea un nuevo cliente
  * @param {Object} clientData - Datos del cliente
- * @returns {Promise<Object|null>} Cliente creado o null si hubo error
+ * @returns {Promise<Object>} Cliente creado
+ * @throws {Error} Si hay un error al crear el cliente
  */
 export async function createClient(clientData) {
-  try {
-    const db = getPrisma();
-    return await db.client.create({
-      data: clientData
-    });
-  } catch (error) {
-    logSession(clientData.name || 'unknown', '⚠️ Error creando cliente:', error?.message || error);
-    return null;
-  }
+  return await clientRepository.createClient(clientData);
 }
 
 /**
@@ -48,11 +30,22 @@ export async function createClient(clientData) {
  */
 export async function updateClientPhone(clientId, phoneNumber) {
   try {
+    // Validar que el número sea un número real, no un ID largo de WhatsApp
+    const { PHONE_VALIDATION_PATTERN } = await import('../../config/constants.js');
+    const cleanPhone = phoneNumber ? phoneNumber.replace(/[^0-9]/g, '') : '';
+    
+    if (!cleanPhone || !PHONE_VALIDATION_PATTERN.test(cleanPhone)) {
+      logSession(`client_${clientId}`, `⚠️ Número inválido o ID largo detectado (${phoneNumber}), no se actualizará`);
+      return false;
+    }
+
+    const { getPrisma } = await import('../../config/database.js');
     const db = getPrisma();
     await db.client.update({
       where: { id: clientId },
-      data: { contact_phone: phoneNumber }
+      data: { contact_phone: cleanPhone }
     });
+    logSession(`client_${clientId}`, `✅ Número de teléfono actualizado: ${cleanPhone}`);
     return true;
   } catch (error) {
     logSession(`client_${clientId}`, '⚠️ Error actualizando teléfono del cliente:', error?.message || error);
@@ -66,20 +59,7 @@ export async function updateClientPhone(clientId, phoneNumber) {
  * @returns {Promise<Object|null>} Cliente o null si no existe
  */
 export async function getClientById(clientId) {
-  try {
-    const db = getPrisma();
-    return await db.client.findUnique({
-      where: { id: clientId },
-      include: {
-        config: true,
-        sessions: true,
-        plan: true
-      }
-    });
-  } catch (error) {
-    logSession(`client_${clientId}`, '⚠️ Error obteniendo cliente:', error?.message || error);
-    return null;
-  }
+  return await clientRepository.getClientById(clientId);
 }
 
 /**
@@ -87,21 +67,6 @@ export async function getClientById(clientId) {
  * @returns {Promise<Array>} Lista de clientes
  */
 export async function getActiveClients() {
-  try {
-    const db = getPrisma();
-    return await db.client.findMany({
-      where: {
-        status: {
-          in: ['active', 'trial']
-        }
-      },
-      include: {
-        sessions: true,
-        config: true
-      }
-    });
-  } catch (error) {
-    return [];
-  }
+  return await clientRepository.getAllActiveClients();
 }
 

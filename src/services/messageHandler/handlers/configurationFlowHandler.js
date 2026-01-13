@@ -66,6 +66,10 @@ export async function handleConfigurationFlow(msg, sessionId, chatId, clientId, 
     // Si el usuario está en un flujo activo, siempre debería haber una respuesta
     // Si no hay respuesta pero el usuario está en el flujo, es un error
     if (configResult.response) {
+      // Resetear cooldown cuando el usuario escribe una opción válida
+      const { resetErrorCooldown } = await import('../utils/errorMessageCooldown.js');
+      resetErrorCooldown(sessionId, chatId, 'configuration');
+      
       try {
         // Marcar ANTES de enviar para evitar que se detecte como acción humana
         const { sendBotMessage } = await import('../humanManager.js');
@@ -75,11 +79,20 @@ export async function handleConfigurationFlow(msg, sessionId, chatId, clientId, 
         logSession(sessionId, `❌ Error enviando respuesta de configuración: ${err?.message || err}`);
       }
     } else {
-      // Si no hay respuesta pero el usuario está en el flujo, enviar mensaje de ayuda genérico
+      // Si no hay respuesta pero el usuario está en el flujo, enviar mensaje de ayuda genérico (con cooldown)
+      const { canSendErrorMessage, recordErrorMessageSent } = await import('../utils/errorMessageCooldown.js');
+      const canSend = canSendErrorMessage(sessionId, chatId, 'configuration');
+      
+      if (!canSend) {
+        logSession(sessionId, `⏳ Mensaje no reconocido en configuración - Cooldown activo, no se envía mensaje de error`);
+        return true; // Procesado (pero no se envía mensaje)
+      }
+      
       logSession(sessionId, `⚠️ Usuario en flujo configuración pero no se devolvió respuesta - Enviando ayuda genérica`);
       try {
         const { sendBotMessage } = await import('../humanManager.js');
         await sendBotMessage(msg, sessionId, chatId, `❓ No entendí tu mensaje.\n\n💡 *Comandos disponibles:*\n• Escribe el número de la opción que quieres editar\n• 'ver' - Ver vista previa\n• 'cancelar' - Salir del modo configuración`);
+        recordErrorMessageSent(sessionId, chatId, 'configuration');
         logSession(sessionId, '✅ Mensaje de ayuda genérico enviado');
       } catch (err) {
         logSession(sessionId, `❌ Error enviando mensaje de ayuda: ${err?.message || err}`);

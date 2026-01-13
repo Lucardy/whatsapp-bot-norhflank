@@ -23,6 +23,7 @@
   "dependencies": {
     "@prisma/client": "^5.19.1",
     "express": "4.19.2",
+    "express-rate-limit": "^8.2.1",
     "inquirer": "^9.2.12",
     "pg": "^8.13.1",
     "puppeteer": "22.15.0",

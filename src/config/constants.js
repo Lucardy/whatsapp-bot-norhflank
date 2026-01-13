@@ -121,3 +121,61 @@ export const MS_PER_HOUR = 60 * 60 * 1000;
 /** Milisegundos en un día */
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// ============================================
+// DELAYS COMUNES
+// ============================================
+
+/** Delay corto (1 segundo) */
+export const SHORT_DELAY = 1 * 1000;
+
+/** Delay medio (2 segundos) */
+export const MEDIUM_DELAY = 2 * 1000;
+
+/** Delay largo (3 segundos) */
+export const LONG_DELAY = 3 * 1000;
+
+// ============================================
+// COOLDOWN Y ERRORES
+// ============================================
+
+/** Cooldown para mensajes de error "no se entendió" (2 minutos) */
+export const ERROR_MESSAGE_COOLDOWN = 2 * MS_PER_MINUTE;
+
+/** Intervalo de limpieza para cooldown de errores (30 minutos) */
+export const CLEANUP_INTERVAL_ERROR_COOLDOWN = 30 * MS_PER_MINUTE;
+
+/** Intervalo de limpieza para caché de configuración (10 minutos) */
+export const CLEANUP_INTERVAL_CONFIG_CACHE = 10 * MS_PER_MINUTE;
+
+// ============================================
+// RATE LIMITING
+// ============================================
+
+/** Ventana de tiempo para rate limiting general (15 minutos) */
+export const RATE_LIMIT_WINDOW_GENERAL = 15 * MS_PER_MINUTE;
+
+/** Ventana de tiempo para rate limiting de QR (5 minutos) */
+export const RATE_LIMIT_WINDOW_QR = 5 * MS_PER_MINUTE;
+
+/** Ventana de tiempo para rate limiting de health check (1 minuto) */
+export const RATE_LIMIT_WINDOW_HEALTH = 1 * MS_PER_MINUTE;
+
+/** Máximo de requests para rate limiting general (100 requests) */
+export const RATE_LIMIT_MAX_GENERAL = 100;
+
+/** Máximo de requests para rate limiting estricto (10 requests) */
+export const RATE_LIMIT_MAX_STRICT = 10;
+
+/** Máximo de requests para rate limiting de QR (50 requests) */
+export const RATE_LIMIT_MAX_QR = 50;
+
+/** Máximo de requests para rate limiting de health check (200 requests) */
+export const RATE_LIMIT_MAX_HEALTH = 200;
+
+// ============================================
+// VALIDACIÓN DE TELÉFONOS
+// ============================================
+
+/** Patrón regex para validación de números de teléfono (8-15 dígitos) */
+export const PHONE_VALIDATION_PATTERN = /^[0-9]{8,15}$/;
+

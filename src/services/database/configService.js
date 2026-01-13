@@ -1,6 +1,7 @@
 // Servicio para operaciones de configuración de clientes
+// NOTA: Este servicio ahora usa los repositorios para abstraer las queries
 import { logSession } from '../../utils/logger/index.js';
-import { getPrisma } from '../../config/database.js';
+import * as configRepository from '../../repositories/configRepository.js';
 import { getCachedConfig, setCachedConfig } from '../messageHandler/cache.js';
 
 /**
@@ -15,34 +16,12 @@ export async function getClientConfig(sessionId) {
     return cached;
   }
 
-  try {
-    const db = getPrisma();
-    const session = await db.whatsAppSession.findUnique({
-      where: { session_name: sessionId },
-      include: {
-        client: {
-          include: {
-            config: true
-          }
-        }
-      }
-    });
-
-    if (session?.client?.config) {
-      const config = {
-        welcome_message: session.client.config.welcome_message,
-        menu_options: session.client.config.menu_options,
-        bot_enabled: session.client.config.bot_enabled
-      };
-      // Guardar en cache
-      setCachedConfig(sessionId, config);
-      return config;
-    }
-  } catch (error) {
-    logSession(sessionId, '⚠️ Error obteniendo configuración de DB:', error?.message || error);
+  const config = await configRepository.getConfigBySessionId(sessionId);
+  if (config) {
+    // Guardar en cache
+    setCachedConfig(sessionId, config);
   }
-
-  return null;
+  return config;
 }
 
 /**
@@ -52,24 +31,7 @@ export async function getClientConfig(sessionId) {
  * @returns {Promise<Object|null>} Configuración del cliente o null
  */
 export async function getClientConfigById(clientId, sessionId) {
-  try {
-    const db = getPrisma();
-    const config = await db.clientConfig.findUnique({
-      where: { client_id: clientId }
-    });
-
-    if (config) {
-      return {
-        welcome_message: config.welcome_message,
-        menu_options: config.menu_options,
-        bot_enabled: config.bot_enabled
-      };
-    }
-  } catch (error) {
-    logSession(sessionId, `⚠️ Error obteniendo configuración de DB para cliente ${clientId}:`, error?.message || error);
-  }
-
-  return null;
+  return await configRepository.getConfigByClientId(clientId);
 }
 
 /**
@@ -80,30 +42,22 @@ export async function getClientConfigById(clientId, sessionId) {
  */
 export async function updateClientConfig(sessionId, configData) {
   try {
-    const db = getPrisma();
-    const session = await db.whatsAppSession.findUnique({
-      where: { session_name: sessionId },
-      include: { client: true }
-    });
+    const { getSessionByName } = await import('./sessionService.js');
+    const session = await getSessionByName(sessionId);
 
     if (!session?.client) {
       return false;
     }
 
-    await db.clientConfig.upsert({
-      where: { client_id: session.client.id },
-      update: configData,
-      create: {
-        client_id: session.client.id,
-        ...configData
-      }
-    });
-
-    // Limpiar cache para forzar recarga
-    const { clearConfigCache } = await import('../messageHandler/cache.js');
-    clearConfigCache(sessionId);
-
-    return true;
+    const result = await configRepository.upsertConfig(session.client.id, configData);
+    
+    if (result) {
+      // Limpiar cache para forzar recarga
+      const { clearConfigCache } = await import('../messageHandler/cache.js');
+      clearConfigCache(sessionId);
+      return true;
+    }
+    return false;
   } catch (error) {
     logSession(sessionId, '⚠️ Error actualizando configuración:', error?.message || error);
     return false;
@@ -119,27 +73,22 @@ export async function updateClientConfig(sessionId, configData) {
  */
 export async function updateClientConfigById(clientId, configData, sessionId) {
   try {
-    const db = getPrisma();
-    
-    await db.clientConfig.upsert({
-      where: { client_id: clientId },
-      update: configData,
-      create: {
-        client_id: clientId,
-        bot_enabled: false, // Por defecto desactivado (cliente debe activarlo manualmente)
-        ...configData
-      }
+    const result = await configRepository.upsertConfig(clientId, {
+      ...configData,
+      bot_enabled: configData.bot_enabled !== undefined ? configData.bot_enabled : false
     });
 
-    // Limpiar cache de todas las sesiones de este cliente
-    const { clearConfigCache } = await import('../messageHandler/cache.js');
-    const { getSessionsByClientId } = await import('./sessionService.js');
-    const sessions = await getSessionsByClientId(clientId);
-    for (const session of sessions) {
-      clearConfigCache(session.session_name);
+    if (result) {
+      // Limpiar cache de todas las sesiones de este cliente
+      const { clearConfigCache } = await import('../messageHandler/cache.js');
+      const { getSessionsByClientId } = await import('./sessionService.js');
+      const sessions = await getSessionsByClientId(clientId);
+      for (const session of sessions) {
+        clearConfigCache(session.session_name);
+      }
+      return true;
     }
-
-    return true;
+    return false;
   } catch (error) {
     logSession(sessionId, `⚠️ Error actualizando configuración para cliente ${clientId}:`, error?.message || error);
     return false;

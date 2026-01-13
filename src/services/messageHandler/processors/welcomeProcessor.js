@@ -35,11 +35,21 @@ export async function processWelcomeAndInvalid(
 ) {
   // Si NO es una opción válida y ya se envió el mensaje de bienvenida, mostrar mensaje de opción inválida
   if (!isOptionValid && welcomeSent) {
+    // Verificar cooldown antes de enviar el mensaje de error
+    const { canSendErrorMessage, recordErrorMessageSent } = await import('../utils/errorMessageCooldown.js');
+    const canSend = canSendErrorMessage(sessionId, chatId, 'main');
+    
+    if (!canSend) {
+      logSession(sessionId, `⏳ Mensaje no reconocido: "${texto}" - Cooldown activo, no se envía mensaje de error`);
+      return true; // Procesado (pero no se envía mensaje)
+    }
+    
     logSession(sessionId, `⚠️ Mensaje no reconocido: "${texto}" - Enviando mensaje de opción inválida`);
     try {
       const { sendBotMessage } = await import('../humanManager.js');
       const invalidMessage = responses.invalid_option || responses.default;
       await sendBotMessage(msg, sessionId, chatId, invalidMessage);
+      recordErrorMessageSent(sessionId, chatId, 'main');
       logSession(sessionId, '✅ Mensaje de opción inválida enviado');
     } catch (replyError) {
       logSession(sessionId, `❌ Error al enviar mensaje de opción inválida: ${replyError?.message || replyError}`);
@@ -58,8 +68,6 @@ export async function processWelcomeAndInvalid(
       // Mostrar mensaje de ayuda con las opciones disponibles
       logSession(sessionId, `💡 Usuario escribió algo inválido sin haber recibido bienvenida - Mostrando opciones disponibles`);
       try {
-        markBotSentMessage(sessionId, chatId);
-        await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
         await sendWelcomeMessage(msg, sessionId, chatId, responses);
         logSession(sessionId, '✅ Mensaje de bienvenida enviado como ayuda');
       } catch (replyError) {

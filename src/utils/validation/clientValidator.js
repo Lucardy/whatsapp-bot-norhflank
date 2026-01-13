@@ -1,6 +1,7 @@
 // Validador completo de datos de clientes
 import { ValidationError } from '../errors.js';
-import { validatePhoneNumber, validateEmail } from './phoneValidator.js';
+import { validatePhoneNumber } from './phoneValidator.js';
+import { validateEmail } from './emailValidator.js';
 import { validateClientName } from './messageValidator.js';
 
 /**

@@ -1,6 +1,7 @@
 // Procesador de opciones válidas del menú
 import { logSession } from '../../../utils/logger/index.js';
 import { handleOption5, handleStandardOption } from '../handlers/optionHandlers.js';
+import { resetErrorCooldown } from '../utils/errorMessageCooldown.js';
 
 /**
  * Procesa opciones válidas del menú (1-8)
@@ -12,6 +13,8 @@ import { handleOption5, handleStandardOption } from '../handlers/optionHandlers.
  * @returns {Promise<boolean>} true si el mensaje fue procesado
  */
 export async function processOptions(msg, sessionId, chatId, textoLower, responses) {
+  // Resetear cooldown cuando el usuario escribe una opción válida
+  resetErrorCooldown(sessionId, chatId, 'main');
   // Opción 5: Prueba gratuita (solo para master)
   if (textoLower === '5' || textoLower === 'prueba gratuita' || textoLower === 'prueba') {
     const { getSessionType } = await import('../../database/sessionService.js');

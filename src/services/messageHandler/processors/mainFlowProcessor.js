@@ -25,6 +25,14 @@ export async function processMainFlow(msg, sessionId, chatId, texto, sessionType
   // Resolver información del cliente
   const { clientId, clientName } = await resolveClientInfo(sessionId, chatId, sessionType);
 
+  // VALIDACIÓN: Verificar si el cliente está suspendido (solo para sesiones de clientes)
+  if (sessionType === 'client' && clientId) {
+    const suspendedProcessed = await processSuspendedClientIfNeeded(msg, sessionId, chatId, clientId, texto);
+    if (suspendedProcessed) {
+      return; // Cliente suspendido, no procesar mensaje
+    }
+  }
+
   // PRIORIDAD: Si está en modo test, procesar ahí ANTES de otros flujos
   const testProcessed = await processTestModeIfActive(msg, sessionId, chatId, clientId, texto, sessionType);
   if (testProcessed) {
@@ -154,5 +162,67 @@ async function processClientMenuIfApplicable(msg, sessionId, chatId, clientId, t
 
   const clientMenuProcessed = await processClientMenu(msg, sessionId, chatId, clientId, texto, texto.toLowerCase().trim());
   return clientMenuProcessed;
+}
+
+/**
+ * Procesa mensajes de clientes suspendidos
+ * Si el cliente está suspendido, envía un mensaje informativo y bloquea el procesamiento
+ * @param {Object} msg - Objeto de mensaje
+ * @param {string} sessionId - ID de la sesión
+ * @param {string} chatId - ID del chat
+ * @param {number} clientId - ID del cliente
+ * @param {string} texto - Texto del mensaje
+ * @returns {Promise<boolean>} true si el cliente está suspendido y se procesó el bloqueo
+ */
+async function processSuspendedClientIfNeeded(msg, sessionId, chatId, clientId, texto) {
+  try {
+    const { isClientSuspended } = await import('../../subscription/subscriptionService.js');
+    const isSuspended = await isClientSuspended(clientId);
+
+    if (!isSuspended) {
+      return false; // No está suspendido, continuar procesamiento normal
+    }
+
+    // Cliente suspendido - verificar si es un comando del menú (permitir ver menú/estadísticas)
+    const textoLower = texto.toLowerCase().trim();
+    const menuCommands = ['menu', 'menú', 'estadisticas', 'estadísticas', 'stats', 'ayuda', 'help'];
+    
+    // Permitir comandos del menú para que el cliente pueda ver su estado
+    if (menuCommands.includes(textoLower)) {
+      logSession(sessionId, `📋 Cliente ${clientId} suspendido - Permitiendo comando del menú: ${textoLower}`);
+      return false; // Continuar procesamiento para mostrar menú
+    }
+
+    // Bloquear cualquier otro mensaje
+    logSession(sessionId, `🚫 Cliente ${clientId} suspendido - Bloqueando procesamiento de mensaje`);
+
+    // Enviar mensaje informativo (con cooldown para no spamear)
+    const { canSendErrorMessage, recordErrorMessageSent } = await import('../utils/errorMessageCooldown.js');
+    const canSend = canSendErrorMessage(sessionId, chatId, 'suspended');
+
+    if (canSend) {
+      const { sendBotMessage } = await import('../humanManager.js');
+      const suspendedMessage = `⚠️ *Tu cuenta está suspendida*
+
+Tu período de prueba gratuita ha finalizado y tu cuenta está suspendida.
+
+Para continuar usando el bot, necesitas activar una suscripción.
+
+📞 *Contacta con nosotros* para reactivar tu cuenta y elegir un plan.
+
+Escribe *menu* para ver más opciones.`;
+
+      await sendBotMessage(msg, sessionId, chatId, suspendedMessage);
+      recordErrorMessageSent(sessionId, chatId, 'suspended');
+    } else {
+      logSession(sessionId, `⏳ Mensaje de cliente suspendido bloqueado - Cooldown activo`);
+    }
+
+    return true; // Mensaje procesado (bloqueado)
+  } catch (error) {
+    logSession(sessionId, `⚠️ Error verificando status suspendido: ${error?.message || error}`);
+    // Si hay error, permitir que continúe el procesamiento normal (mejor responder que bloquear)
+    return false;
+  }
 }
 

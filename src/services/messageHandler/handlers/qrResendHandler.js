@@ -23,12 +23,35 @@ export async function handleQRResend(msg, sessionId, chatId, texto) {
   logSession(sessionId, `📱 Cliente ${chatId} solicitó reenvío de QR`);
   
   try {
-    // Buscar el cliente por número de teléfono
+    // Extraer el número real del mensaje (igual que en phoneCapture.js)
+    let realPhoneNumber = null;
+    if (msg.getChat && typeof msg.getChat === 'function') {
+      try {
+        const chat = await msg.getChat();
+        if (chat && chat.name) {
+          const phoneFromChat = chat.name.replace(/\D/g, '');
+          const { PHONE_VALIDATION_PATTERN } = await import('../../../config/constants.js');
+          if (PHONE_VALIDATION_PATTERN.test(phoneFromChat)) {
+            realPhoneNumber = phoneFromChat;
+            logSession(sessionId, `✅ Número real extraído desde chat.name: ${realPhoneNumber}`);
+          }
+        }
+      } catch (error) {
+        logSession(sessionId, `⚠️ Error extrayendo número real: ${error?.message || error}`);
+      }
+    }
+    
+    if (!realPhoneNumber) {
+      logSession(sessionId, `⚠️ No se pudo extraer número real del mensaje para ${chatId}`);
+      return false;
+    }
+    
+    // Buscar el cliente por número de teléfono real
     const { findClientByPhone } = await import('../../trialFlow/dbQueries.js');
-    const client = await findClientByPhone(chatId);
+    const client = await findClientByPhone(realPhoneNumber);
     
     if (!client) {
-      logSession(sessionId, `⚠️ No se encontró cliente para ${chatId}`);
+      logSession(sessionId, `⚠️ No se encontró cliente para número real ${realPhoneNumber}`);
       return false;
     }
     

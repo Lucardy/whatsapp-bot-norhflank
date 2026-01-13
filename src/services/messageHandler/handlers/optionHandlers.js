@@ -191,18 +191,14 @@ export async function handleOption6(msg, sessionId, chatId) {
 
 ⏰ *El código es válido por unos minutos.*`;
 
-    markBotSentMessage(sessionId, chatId);
-    await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
-    await msg.reply(responseMessage);
+    await sendBotMessage(msg, sessionId, chatId, responseMessage);
     logSession(sessionId, `✅ Test de pairing code completado exitosamente`);
     
   } catch (testError) {
     logSession(sessionId, `❌ Error en test de pairing code: ${testError?.message || testError}`);
     logSession(sessionId, `❌ Stack: ${testError?.stack || 'N/A'}`);
     try {
-      markBotSentMessage(sessionId, chatId);
-      await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
-      await msg.reply(`❌ *Error en test de pairing code*\n\n${testError?.message || 'Error desconocido'}\n\n📱 Tu número: ${chatId}`);
+      await sendBotMessage(msg, sessionId, chatId, `❌ *Error en test de pairing code*\n\n${testError?.message || 'Error desconocido'}\n\n📱 Tu número: ${chatId}`);
     } catch (err) {
       logSession(sessionId, `❌ Error enviando mensaje de error: ${err?.message || err}`);
     }
@@ -241,15 +237,14 @@ export async function handleOption5(msg, sessionId, chatId) {
   }
   
   try {
-    // Marcar ANTES de enviar para evitar que se detecte como acción humana
-    markBotSentMessage(sessionId, chatId);
-    // Pequeño delay para asegurar que el registro se procese antes del listener
-    await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
-    await msg.reply(startResult.message);
+    // Usar sendBotMessage para consolidar el patrón
+    const { sendBotMessage } = await import('../humanManager.js');
+    await sendBotMessage(msg, sessionId, chatId, startResult.message);
     logSession(sessionId, '✅ Mensaje de inicio de prueba gratuita enviado');
     
     // Si hay una sesión pendiente y se generó el QR, enviarlo inmediatamente
-    if (startResult.hasPendingSession && startResult.qrDataURL) {
+    // PERO solo si NO es cliente existente (los clientes existentes ahora eligen a dónde enviar)
+    if (startResult.hasPendingSession && startResult.qrDataURL && !startResult.isExistingClient) {
       logSession(sessionId, `📷 Enviando QR para sesión pendiente: ${startResult.sessionName}`);
       
       // Guardar el mensaje original para poder responder cuando la sesión se conecte
@@ -261,7 +256,7 @@ export async function handleOption5(msg, sessionId, chatId) {
       
       await sendQRImage(msg, sessionId, chatId, startResult.qrDataURL);
       logSession(sessionId, `✅ QR enviado para sesión pendiente`);
-    } else if (startResult.hasPendingSession && startResult.sessionName && sessionManager) {
+    } else if (startResult.hasPendingSession && startResult.sessionName && sessionManager && !startResult.isExistingClient) {
       // Si hay sesión pendiente pero no hay QR aún, esperar a que se genere
       logSession(sessionId, `⏳ Esperando generación de QR para sesión: ${startResult.sessionName}`);
       const maxWaitTime = 30000; // 30 segundos máximo
@@ -323,12 +318,10 @@ export async function handleStandardOption(msg, sessionId, chatId, textoLower, r
   logSession(sessionId, `💬 Respondiendo: opción ${textoLower} (${optionName})`);
   
   try {
-    // Marcar ANTES de enviar para evitar que se detecte como acción humana
-    markBotSentMessage(sessionId, chatId);
-    // Pequeño delay para asegurar que el registro se procese antes del listener
-    await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
-    const result = await msg.reply(responseText);
-    logSession(sessionId, '✅ Respuesta enviada exitosamente. ID:', result?.id?._serialized || result?.id);
+    // Usar sendBotMessage para consolidar el patrón
+    const { sendBotMessage } = await import('../humanManager.js');
+    await sendBotMessage(msg, sessionId, chatId, responseText);
+    logSession(sessionId, '✅ Respuesta enviada exitosamente');
   } catch (replyError) {
     logSession(sessionId, `❌ Error al enviar respuesta (opción ${textoLower}):`, replyError?.message || replyError, replyError?.stack);
   }

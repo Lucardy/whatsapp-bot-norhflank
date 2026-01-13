@@ -68,18 +68,23 @@ Hola *${clientName}*, tu bot de WhatsApp ya está conectado y listo para usar.
  */
 export async function sendConnectionConfirmation(clientSessionId) {
   try {
+    logSession(clientSessionId, `📤 Iniciando envío de confirmación de conexión...`);
+    
     // Obtener información de la sesión del cliente desde la base de datos
     const { getSessionByName } = await import('../database/sessionService.js');
     const clientSession = await getSessionByName(clientSessionId);
     
     if (!clientSession || !clientSession.client) {
       logSession(clientSessionId, `⚠️ No se encontró sesión o cliente para enviar confirmación`);
+      logSession(clientSessionId, `   Sesión encontrada: ${!!clientSession}, Cliente encontrado: ${!!clientSession?.client}`);
       return false;
     }
     
     const clientName = clientSession.client.name;
     const clientContactPhone = clientSession.client.contact_phone; // Número del cliente (para el link)
     const clientBotPhone = clientSession.phone_number; // Número del bot del cliente
+    
+    logSession(clientSessionId, `📋 Datos del cliente: nombre=${clientName}, contact_phone=${clientContactPhone || 'null'}, bot_phone=${clientBotPhone || 'null'}`);
     
     if (!clientContactPhone) {
       logSession(clientSessionId, `⚠️ Cliente ${clientName} no tiene número de contacto para generar link`);
@@ -95,6 +100,7 @@ export async function sendConnectionConfirmation(clientSessionId) {
     
     // Intentar obtener el mensaje original guardado cuando se envió el QR
     const originalMessage = pendingConfirmationMessages.get(clientSessionId);
+    logSession(clientSessionId, `📨 Mensaje original guardado: ${originalMessage ? 'Sí' : 'No'}`);
     
     // IMPORTANTE: La confirmación debe enviarse al número del cliente que se contactó originalmente
     // Usamos el mensaje original (cuando escribió "5" o completó su nombre) para responder
@@ -111,15 +117,12 @@ export async function sendConnectionConfirmation(clientSessionId) {
         const masterSessionId = masterSessions[0]?.session_name;
         
         if (masterSessionId) {
-          // Marcar ANTES de enviar para evitar detección de acción humana
-          const { markBotSentMessage } = await import('../../services/messageHandler/humanManager.js');
-          const { BOT_MESSAGE_REGISTER_DELAY } = await import('../../config/constants.js');
+          // Usar sendBotMessage para consolidar el patrón markBotSentMessage + delay
+          const { sendBotMessage } = await import('../../services/messageHandler/humanManager.js');
           const chatId = (originalMessage.from || '').split('@')[0] || '';
-          markBotSentMessage(masterSessionId, chatId);
-          await new Promise(resolve => setTimeout(resolve, BOT_MESSAGE_REGISTER_DELAY));
           
           // Responder al mensaje original del cliente (esto garantiza que el chat existe)
-          await originalMessage.reply(confirmationMessage);
+          await sendBotMessage(originalMessage, masterSessionId, chatId, confirmationMessage);
           
           // Limpiar el mensaje guardado
           pendingConfirmationMessages.delete(clientSessionId);
@@ -135,9 +138,11 @@ export async function sendConnectionConfirmation(clientSessionId) {
       }
     }
     
-    // Método alternativo: intentar enviar mensaje nuevo (puede fallar si el chat no existe)
+    // Método alternativo: intentar enviar mensaje nuevo usando el número del cliente
+    // Si no hay mensaje original guardado, intentar enviar directamente al número del cliente
     if (!clientContactPhone) {
       logSession(clientSessionId, `⚠️ Cliente ${clientName} no tiene número de contacto y no hay mensaje original guardado`);
+      logSession(clientSessionId, `   El mensaje de confirmación no se puede enviar sin número de contacto`);
       return false;
     }
     
@@ -164,10 +169,12 @@ export async function sendConnectionConfirmation(clientSessionId) {
     // Construir mensaje de confirmación con el número del cliente (contact_phone) para el link
     const confirmationMessage = buildConnectionConfirmationMessage(clientName, clientContactPhone, clientBotPhone || '');
     
-    // Formatear número de teléfono para WhatsApp
-    const clientPhoneFormatted = `${clientContactPhone}@c.us`;
+    // Formatear número de teléfono para WhatsApp (normalizar primero)
+    const { normalizePhoneNumber } = await import('../../utils/validation/phoneValidator.js');
+    const normalizedPhone = normalizePhoneNumber(clientContactPhone);
+    const clientPhoneFormatted = `${normalizedPhone}@c.us`;
     
-    logSession(clientSessionId, `📤 Enviando confirmación de conexión a cliente ${clientName} (${clientContactPhone}) desde master...`);
+    logSession(clientSessionId, `📤 Enviando confirmación de conexión a cliente ${clientName} (${normalizedPhone}) desde master...`);
     
     try {
       // Intentar cargar el chat primero para asegurar que existe
@@ -178,24 +185,37 @@ export async function sendConnectionConfirmation(clientSessionId) {
         logSession(clientSessionId, `⚠️ Error cargando chats (continuando): ${chatsError?.message || chatsError}`);
       }
       
+      // Intentar obtener el chat primero
+      let chat = null;
+      try {
+        chat = await masterClient.getChatById(clientPhoneFormatted);
+        logSession(clientSessionId, `✅ Chat encontrado para ${normalizedPhone}`);
+      } catch (chatError) {
+        logSession(clientSessionId, `⚠️ No se pudo obtener chat directamente, intentando crear...`);
+        // Si no existe el chat, intentar enviar directamente (WhatsApp puede crear el chat automáticamente)
+      }
+      
       // Enviar el mensaje
       await masterClient.sendMessage(clientPhoneFormatted, confirmationMessage);
       
-      logSession(clientSessionId, `✅ Confirmación de conexión enviada exitosamente a ${clientName}`);
+      logSession(clientSessionId, `✅ Confirmación de conexión enviada exitosamente a ${clientName} (${normalizedPhone})`);
       return true;
     } catch (sendError) {
       const errorMessage = sendError?.message || sendError?.toString() || 'Error desconocido';
       logSession(clientSessionId, `❌ Error enviando confirmación de conexión: ${errorMessage}`);
+      logSession(clientSessionId, `   Stack: ${sendError?.stack || 'N/A'}`);
       
-      // Si falla, intentar con getChatById
+      // Si falla, intentar con diferentes formatos del número
       try {
-        const chat = await masterClient.getChatById(clientPhoneFormatted);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        await masterClient.sendMessage(clientPhoneFormatted, confirmationMessage);
-        logSession(clientSessionId, `✅ Confirmación enviada usando getChatById`);
+        // Intentar con formato alternativo (sin @c.us)
+        const altPhoneFormatted = `${normalizedPhone}@c.us`;
+        logSession(clientSessionId, `🔄 Reintentando con formato alternativo: ${altPhoneFormatted}`);
+        await masterClient.sendMessage(altPhoneFormatted, confirmationMessage);
+        logSession(clientSessionId, `✅ Confirmación enviada usando formato alternativo`);
         return true;
       } catch (retryError) {
         logSession(clientSessionId, `❌ Error en reintento: ${retryError?.message || retryError}`);
+        logSession(clientSessionId, `   El mensaje de confirmación no se pudo enviar, pero el cliente puede usar su bot normalmente`);
         return false;
       }
     }

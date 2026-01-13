@@ -56,6 +56,18 @@ export async function processClientMenu(msg, sessionId, chatId, clientId, texto,
     return true;
   }
   
+  // Verificar si está en modo edición rápida (antes del menú)
+  const { isInQuickEditMode, handleQuickEdit } = await import('../../configurationFlow/handlers/quickEditHandler.js');
+  if (isInQuickEditMode(clientId)) {
+    logSession(sessionId, `⚡ Cliente ${clientId} está en modo edición rápida`);
+    const quickEditResult = await handleQuickEdit(clientId, texto, sessionId);
+    if (quickEditResult) {
+      const { sendBotMessage } = await import('../humanManager.js');
+      await sendBotMessage(msg, sessionId, chatId, quickEditResult.response);
+      return true;
+    }
+  }
+  
   // Si el cliente está en el menú, manejar las opciones (SIEMPRE, incluso si el bot está desactivado)
   const { isInClientMenu, handleClientMenuOption } = await import('../../clientMenu/clientMenuHandler.js');
   if (isInClientMenu(clientId)) {
@@ -80,6 +92,7 @@ export async function processClientMenu(msg, sessionId, chatId, clientId, texto,
   // Verificar si el bot está activo antes de responder (solo para sesiones de clientes)
   // PERO permitir modo test incluso si está desactivado
   const { isBotEnabled } = await import('../../clientMenu/clientMenuService.js');
+  const { isInTestMode } = await import('../../clientMenu/testModeService.js');
   const botEnabled = await isBotEnabled(clientId, sessionId);
   
   if (!botEnabled && !isInTestMode(clientId)) {

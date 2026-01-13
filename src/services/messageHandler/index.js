@@ -65,6 +65,54 @@ export async function handleMessage(msg, sessionId) {
     const sessionType = await getSessionType(sessionId);
     logSession(sessionId, `🔍 Tipo de sesión detectado: ${sessionType}`);
     
+    // 2.1. Verificar si el bot está activado para sesiones de clientes (antes de procesar)
+    if (sessionType === 'client') {
+      const { resolveClientInfo } = await import('./utils/clientResolver.js');
+      const { clientId } = await resolveClientInfo(sessionId, chatId, sessionType);
+      
+      if (clientId) {
+        // Solo verificar bot_enabled si NO es un mensaje propio del cliente (fromMe)
+        // Los mensajes propios del cliente deben procesarse para que pueda gestionar su bot
+        if (!msg.fromMe) {
+          const { isBotEnabled } = await import('../clientMenu/clientMenuService.js');
+          const botEnabled = await isBotEnabled(clientId, sessionId);
+          
+          if (!botEnabled) {
+            logSession(sessionId, `⏸️ Bot desactivado para cliente ${clientId} - Ignorando mensaje de ${chatId}`);
+            logSession(sessionId, `💡 El cliente debe activar el bot desde configuraciones para recibir respuestas automáticas`);
+            return; // Bot desactivado, no procesar mensaje
+          }
+        }
+      }
+    }
+    
+    // 2.2. Guardar número de teléfono del cliente desde el mensaje
+    // IMPORTANTE: El número solo se puede obtener desde el mensaje usando message.getContact()
+    // Esto funciona tanto para sesiones 'client' como 'master' cuando un cliente envía un mensaje
+    if (!msg.fromMe) {
+      try {
+        const { savePhoneNumberFromMessage, savePhoneNumberFromMasterMessage } = await import('../../services/sessionManager/phoneCapture.js');
+        
+        logSession(sessionId, `📱 Intentando guardar número desde mensaje (sessionType: ${sessionType}, fromMe: ${msg.fromMe})`);
+        
+        if (sessionType === 'client') {
+          // Si es sesión cliente, guardar el número en esa sesión
+          // Esto ocurre cuando el cliente envía un mensaje a su propia sesión
+          await savePhoneNumberFromMessage(msg, sessionId);
+        } else if (sessionType === 'master') {
+          // Si es sesión master, obtener el número y buscar/actualizar la sesión del cliente
+          // Esto ocurre cuando el cliente envía un mensaje al master
+          await savePhoneNumberFromMasterMessage(msg, sessionId);
+        }
+      } catch (phoneError) {
+        // No bloquear el flujo si falla guardar el número
+        logSession(sessionId, `⚠️ Error guardando número desde mensaje: ${phoneError?.message || phoneError}`);
+        logSession(sessionId, `   Stack: ${phoneError?.stack || 'N/A'}`);
+      }
+    } else {
+      logSession(sessionId, `ℹ️ Mensaje es fromMe=true, no se guardará número (es un mensaje del bot)`);
+    }
+    
     // 2.5. PREVENIR BUCLE: Ignorar mensajes del bot que contienen prefijo de modo test
     if (msg.fromMe && sessionType === 'client' && isBotTestMessage(texto)) {
       logSession(sessionId, `🤖 Ignorando mensaje del bot en modo test - Contiene prefijo de modo test (previene bucle infinito)`);

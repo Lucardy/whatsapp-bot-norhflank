@@ -1,6 +1,7 @@
 // Filtros de mensajes de WhatsApp
 import { logSession } from '../../utils/logger/index.js';
 import { getSessionReadyTime } from './index.js';
+import { MAX_MESSAGE_AGE_MS } from '../../config/constants.js';
 
 // Timestamp de cuando el bot inició (para ignorar mensajes antiguos)
 let botStartTime = Date.now();
@@ -84,9 +85,8 @@ export function shouldIgnoreOldMessage(msg, sessionId) {
     // Si no hay tiempo de sesión registrado, usar el tiempo global del bot
     if (messageTimestamp) {
       const messageAge = Date.now() - messageTimestamp;
-      const MAX_AGE_MS = 2 * 60 * 1000; // 2 minutos
       
-      if (messageAge > MAX_AGE_MS) {
+      if (messageAge > MAX_MESSAGE_AGE_MS) {
         logSession(sessionId, `⏭️ Ignorado: mensaje muy antiguo (${Math.round(messageAge / 1000)}s de antigüedad)`);
         return true;
       }

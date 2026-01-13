@@ -2,14 +2,16 @@
 import { logSession } from '../../utils/logger/index.js';
 
 /**
- * Normaliza y detecta el código de país de un número de teléfono
+ * Normaliza y detecta el código de país de un número de teléfono para pairing code
+ * Esta función es un wrapper simple que usa la función centralizada de normalización
  * @param {string} phoneNumber - Número de teléfono a normalizar
  * @param {string} sessionId - ID de la sesión para logging
  * @returns {Promise<string>} Número normalizado con código de país
  */
 export async function normalizePhoneForPairing(phoneNumber, sessionId) {
+  // Usar la función centralizada de normalización
   const { normalizePhoneWithCountryCode } = await import('../../utils/validation/phoneValidator.js');
-  return await normalizePhoneWithCountryCode(phoneNumber, 'AR', sessionId);
+  return normalizePhoneWithCountryCode(phoneNumber, 'AR', sessionId);
 }
 
 /**

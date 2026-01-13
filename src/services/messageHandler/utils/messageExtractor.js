@@ -1,4 +1,6 @@
 // Utilidad para extraer datos de un mensaje de WhatsApp
+import { PHONE_VALIDATION_PATTERN } from '../../../config/constants.js';
+
 /**
  * Extrae el chatId de un mensaje
  * @param {Object} msg - Objeto de mensaje de whatsapp-web.js
@@ -14,7 +16,11 @@ export function extractChatId(msg) {
 
 /**
  * Extrae el número real de teléfono del contacto desde el mensaje
- * Intenta obtener el número real del contacto, no solo el chatId que puede ser un identificador largo
+ * FORMA CORRECTA: Usa chat.name que contiene el número formateado (ej: "+54 9 2665 28-5510")
+ * Este es el método que funciona correctamente, igual que phoneCapture.js
+ * 
+ * IMPORTANTE: chat.name contiene el número real del cliente cuando envía un mensaje
+ * 
  * @param {Object} msg - Objeto de mensaje de whatsapp-web.js
  * @param {string} sessionId - ID de la sesión para logging (opcional)
  * @returns {Promise<string|null>} Número de teléfono real o null si no se puede obtener
@@ -24,52 +30,32 @@ export async function extractRealPhoneNumber(msg, sessionId = null) {
   const logger = sessionId ? (msg) => logSession(sessionId, msg) : () => {};
   
   try {
-    // Primero intentar obtener el número desde msg.from (puede ser un número real o un identificador largo)
-    const chatId = msg.fromMe 
-      ? ((msg.to || msg.from || '').split('@')[0] || '')
-      : ((msg.from || '').split('@')[0] || '');
-    
-    // Verificar si el chatId parece ser un número de teléfono válido
-    // Un número de teléfono válido tiene entre 8 y 15 dígitos y solo contiene números
-    const phoneRegex = /^[0-9]{8,15}$/;
-    
-    if (phoneRegex.test(chatId)) {
-      logger(`📱 chatId parece ser un número válido: ${chatId}`);
-      return chatId;
+    // MÉTODO CORRECTO: Obtener el número desde chat.name (igual que phoneCapture.js)
+    if (!msg.getChat || typeof msg.getChat !== 'function') {
+      logger(`⚠️ msg.getChat no está disponible`);
+      return null;
     }
-    
-    logger(`⚠️ chatId no parece ser un número válido (${chatId}), intentando obtener contacto...`);
-    
-    // Si el chatId no es un número válido, intentar obtener el contacto
-    if (msg.getContact && typeof msg.getContact === 'function') {
-      try {
-        const contact = await msg.getContact();
-        if (contact && contact.number) {
-          const phoneNumber = contact.number.replace(/[^0-9]/g, ''); // Remover caracteres no numéricos
-          if (phoneRegex.test(phoneNumber)) {
-            logger(`✅ Número real obtenido del contacto: ${phoneNumber}`);
-            return phoneNumber;
-          }
-        }
-        
-        // También intentar con contact.id
-        if (contact && contact.id) {
-          const contactId = contact.id.user || contact.id._serialized?.split('@')[0] || '';
-          if (phoneRegex.test(contactId)) {
-            logger(`✅ Número real obtenido del contact.id: ${contactId}`);
-            return contactId;
-          }
-        }
-      } catch (contactError) {
-        logger(`⚠️ Error obteniendo contacto: ${contactError?.message || contactError}`);
-      }
+
+    const chat = await msg.getChat();
+    if (!chat || !chat.name) {
+      logger(`⚠️ No se pudo obtener chat o chat.name desde el mensaje`);
+      return null;
     }
+
+    // Extraer el número real desde chat.name (ej: "+54 9 2665 28-5510" -> "5492665285510")
+    const phoneNumber = chat.name.replace(/\D/g, ''); // Remover todo lo que no sea dígito
     
-    // Si no se pudo obtener el número real, retornar null
-    logger(`⚠️ No se pudo obtener número real del contacto, usando chatId: ${chatId}`);
+    // Validar que sea un número válido (8-15 dígitos)
+    if (PHONE_VALIDATION_PATTERN.test(phoneNumber)) {
+      logger(`✅ Número real obtenido desde chat.name: ${phoneNumber} (chat.name: ${chat.name})`);
+      return phoneNumber;
+    }
+
+    // Si no es válido, chat.name no contiene un número válido
+    logger(`⚠️ chat.name no contiene un número válido: ${chat.name}`);
     return null;
   } catch (error) {
-    logger(`❌ Error extrayendo número real: ${error?.message || error}`);
+    logger(`❌ Error extrayendo número real desde chat.name: ${error?.message || error}`);
     return null;
   }
 }

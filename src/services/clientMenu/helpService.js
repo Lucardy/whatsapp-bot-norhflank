@@ -27,6 +27,10 @@ export async function showHelp(clientId, sessionId) {
 🔹 *"probar"* o *"test"* o *"preview"*
    Activa el modo test para probar tu bot sin activarlo
 
+🔹 *"editar [número] label"* o *"editar [número] respuesta"*
+   Edición rápida: edita directamente la etiqueta o respuesta de una opción
+   Ejemplo: "editar 1 label" o "editar 2 respuesta"
+
 💡 *Nota:* El comando "admin" solo funciona en el número master de Unikuo, no en tu bot personal.
 
 *Opciones del menú:*
@@ -45,6 +49,13 @@ export async function showHelp(clientId, sessionId) {
 
 5️⃣ *Probar bot (Modo Test)*
    Prueba cómo funciona tu bot sin activarlo
+
+6️⃣ *Estadísticas*
+   Ver métricas y uso de tu bot
+
+*Edición Rápida:*
+   Puedes editar opciones sin entrar al modo configuración completo.
+   Ejemplo: "editar 1 label" para cambiar la etiqueta de la opción 1.
 
 *¿Cómo funciona tu bot?*
 

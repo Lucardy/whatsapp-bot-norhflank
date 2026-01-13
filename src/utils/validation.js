@@ -2,7 +2,9 @@
 import { ValidationError } from './errors.js';
 
 // Re-exportar validadores mejorados
-export { validatePhoneNumber, validateEmail, normalizePhoneNumber } from './validation/phoneValidator.js';
+export { validatePhoneNumber } from './validation/phoneValidator.js';
+export { validateEmail } from './validation/emailValidator.js';
+export { normalizePhoneNumber, normalizePhoneWithCountryCode } from './validation/phoneNormalizer.js';
 export { validateBotMessage, validateOptionLabel, validateClientName } from './validation/messageValidator.js';
 export { validateMenuOptions, validateClientConfig, validateJSON } from './validation/configValidator.js';
 export { validateClientData, validateClientStatus } from './validation/clientValidator.js';

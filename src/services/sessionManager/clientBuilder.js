@@ -3,6 +3,7 @@ import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
 import puppeteer from 'puppeteer';
 import fs from 'fs';
+import path from 'path';
 import { logSession } from '../../utils/logger/index.js';
 
 /**
@@ -13,7 +14,7 @@ export function getPuppeteerConfig() {
   return {
     headless: true,
     executablePath: puppeteer.executablePath(),
-    protocolTimeout: 120_000,
+    protocolTimeout: 300_000, // Aumentado a 5 minutos para conexiones lentas
     defaultViewport: { width: 800, height: 600, deviceScaleFactor: 1 },
     args: [
       '--no-sandbox',
@@ -28,7 +29,9 @@ export function getPuppeteerConfig() {
       '--no-first-run',
       '--no-default-browser-check',
       '--mute-audio',
-      '--window-size=800,600'
+      '--window-size=800,600',
+      '--disable-web-security', // Ayuda con problemas de CORS
+      '--disable-features=IsolateOrigins,site-per-process' // Ayuda con conexiones
       // Removido '--blink-settings=imagesEnabled=false' porque bloquea el envío de imágenes
     ]
   };
@@ -48,6 +51,16 @@ export function createWhatsAppClient(sessionId, sessionPath) {
   if (!fs.existsSync(sessionPath)) {
     fs.mkdirSync(sessionPath, { recursive: true });
     logSession(sessionId, `📁 Directorio de sesión creado: ${sessionPath}`);
+  }
+  
+  // Verificar si ya existe una sesión guardada
+  const authPath = path.join(sessionPath, '.wwebjs_auth');
+  const hasSavedSession = fs.existsSync(authPath);
+  if (hasSavedSession) {
+    logSession(sessionId, `✅ Sesión guardada encontrada en: ${authPath}`);
+  } else {
+    logSession(sessionId, `⚠️ No se encontró sesión guardada en: ${authPath}`);
+    logSession(sessionId, `   Se generará un nuevo QR al inicializar`);
   }
   
   // LocalAuth guardará los datos de autenticación en .wwebjs_auth/ dentro de sessionPath

@@ -9,6 +9,7 @@ import { handleSelection } from './handlers/selectionHandler.js';
 import { handleWelcomeEdit } from './handlers/welcomeHandler.js';
 import { handleOptionLabelEdit } from './handlers/optionLabelHandler.js';
 import { handleOptionResponseEdit } from './handlers/optionResponseHandler.js';
+import { handleExcludedNumbers } from './handlers/excludedNumbersHandler.js';
 import { handleResetConfirmation } from './handlers/resetHandler.js';
 import { handleConfirmation } from './handlers/confirmationHandler.js';
 import { returnToSelectionMenu } from './navigation.js';
@@ -35,7 +36,8 @@ export async function startConfiguration(clientId, phoneNumber, sessionId) {
   createSession(clientId, {
     phoneNumber,
     welcome_message: currentConfig?.welcome_message || null,
-    options: currentConfig?.menu_options?.options || []
+    options: currentConfig?.menu_options?.options || [],
+    excluded_numbers: currentConfig?.excluded_numbers || []
   });
   
   const session = getSession(clientId);
@@ -116,6 +118,10 @@ export async function handleConfigurationStep(clientId, message, sessionId) {
       
     case ConfigStep.OPTION_RESPONSE:
       result = await handleOptionResponseEdit(clientId, message, sessionId);
+      break;
+      
+    case ConfigStep.EXCLUDED_NUMBERS:
+      result = await handleExcludedNumbers(clientId, message, sessionId);
       break;
       
     default:

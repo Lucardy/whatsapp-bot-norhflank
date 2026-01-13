@@ -1,111 +1,53 @@
-// Gestor de cache mejorado con TTL y estrategias
-import { TTLCache, LRUCache } from './strategies.js';
+// Caché centralizado para el sistema
+export {
+  getCachedConfig,
+  setCachedConfig,
+  clearCachedConfig,
+  clearAllCachedConfigs,
+  getCacheMetrics
+} from './configCache.js';
 
-// Cache de configuraciones con TTL (5 minutos)
-const configCache = new TTLCache(5 * 60 * 1000);
-
-// Cache de cooldown (sin TTL, se limpia manualmente)
-const cooldownCache = new Map();
-
-// Limpiar cache expirado cada 10 minutos
-const cacheCleanupInterval = setInterval(() => {
-  const cleaned = configCache.cleanup();
-  if (cleaned > 0) {
-    // Log opcional si se limpia algo
-  }
-  
-  // Limpiar cooldown cache antiguo (más de 1 hora)
-  const oneHourAgo = Date.now() - (60 * 60 * 1000);
-  for (const [key, timestamp] of cooldownCache.entries()) {
-    if (timestamp < oneHourAgo) {
-      cooldownCache.delete(key);
-    }
-  }
-}, 10 * 60 * 1000);
-
-// Registrar interval para limpieza (async)
-(async () => {
-  try {
-    const { registerInterval } = await import('../../utils/resourceCleanup.js');
-    registerInterval('cache', cacheCleanupInterval);
-  } catch (err) {
-    // Continuar si no está disponible
-  }
-})();
+// Caché de cooldown y mensajes
+const cooldownCache = new Map(); // chatId -> timestamp
+const lastMessageTimes = new Map(); // chatId -> timestamp
 
 /**
- * Obtiene una configuración del cache
- * @param {string} sessionId - ID de la sesión
- * @returns {Object|null} Configuración cacheada o null
- */
-export function getCachedConfig(sessionId) {
-  return configCache.get(sessionId);
-}
-
-/**
- * Guarda una configuración en el cache
- * @param {string} sessionId - ID de la sesión
- * @param {Object} config - Configuración a cachear
- * @param {number} ttl - TTL en milisegundos (opcional)
- */
-export function setCachedConfig(sessionId, config, ttl = null) {
-  configCache.set(sessionId, config, ttl);
-}
-
-/**
- * Limpia el cache de configuraciones
- * @param {string} sessionId - ID de la sesión (opcional, si no se pasa limpia todo)
- */
-export function clearConfigCache(sessionId = null) {
-  if (sessionId) {
-    configCache.delete(sessionId);
-  } else {
-    configCache.clear();
-  }
-}
-
-/**
- * Verifica el cooldown para un remitente
- * @param {string} from - ID del remitente
+ * Verifica si un chat está en cooldown
+ * @param {string} chatId - ID del chat
  * @param {number} cooldownMs - Tiempo de cooldown en milisegundos
- * @returns {boolean} true si está en cooldown, false si puede enviar
+ * @returns {boolean} true si está en cooldown
  */
-export function checkCooldown(from, cooldownMs = 1500) {
-  const now = Date.now();
-  const last = cooldownCache.get(from) || 0;
-  
-  if (now - last < cooldownMs) {
-    return true; // Está en cooldown
+export function checkCooldown(chatId, cooldownMs) {
+  const lastTime = cooldownCache.get(chatId);
+  if (!lastTime) {
+    return false;
   }
   
-  cooldownCache.set(from, now);
-  return false; // No está en cooldown
+  const now = Date.now();
+  if (now - lastTime < cooldownMs) {
+    return true; // En cooldown
+  }
+  
+  // Cooldown expirado, actualizar
+  cooldownCache.set(chatId, now);
+  return false;
 }
 
 /**
- * Obtiene el tiempo del último mensaje de un remitente
- * @param {string} from - ID del remitente
- * @returns {number} Timestamp del último mensaje o 0
+ * Obtiene el tiempo del último mensaje
+ * @param {string} chatId - ID del chat
+ * @returns {number|null} Timestamp del último mensaje o null
  */
-export function getLastMessageTime(from) {
-  return cooldownCache.get(from) || 0;
+export function getLastMessageTime(chatId) {
+  return lastMessageTimes.get(chatId) || null;
 }
 
 /**
- * Limpia el cache de cooldown (útil para testing o reset)
+ * Actualiza el tiempo del último mensaje
+ * @param {string} chatId - ID del chat
  */
-export function clearCooldownCache() {
-  cooldownCache.clear();
+export function updateLastMessageTime(chatId) {
+  const now = Date.now();
+  lastMessageTimes.set(chatId, now);
+  cooldownCache.set(chatId, now);
 }
-
-/**
- * Obtiene estadísticas del cache
- * @returns {Object} Estadísticas
- */
-export function getCacheStats() {
-  return {
-    configCacheSize: configCache.size(),
-    cooldownCacheSize: cooldownCache.size
-  };
-}
-

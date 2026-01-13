@@ -1,4 +1,6 @@
 // Rutas relacionadas con health check y estado general
+import { healthLimiter } from '../../middleware/rateLimit.js';
+
 /**
  * Configura las rutas de health check
  * @param {Express} app - Instancia de Express
@@ -15,8 +17,8 @@ export function setupHealthRoutes(app, sessionManager) {
     });
   });
 
-  // Health check
-  app.get('/health', (_req, res) => {
+  // Health check (con rate limiting permisivo)
+  app.get('/health', healthLimiter, (_req, res) => {
     const sessions = sessionManager.getAllSessions();
     const activeSessions = sessions.filter(s => s.isReady).length;
     res.json({ 

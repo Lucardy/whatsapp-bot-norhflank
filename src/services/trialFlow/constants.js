@@ -6,6 +6,7 @@ export const TrialStep = {
   NAME: 'collecting_name',
   EMAIL: 'collecting_email',
   QR_PHONE: 'collecting_qr_phone',
+  QR_SENT: 'qr_sent', // QR enviado, pero se puede cambiar el número o reenviar
   COMPLETED: 'completed'
 };
 

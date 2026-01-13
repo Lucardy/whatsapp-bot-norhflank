@@ -1,6 +1,7 @@
 // Funciones de búsqueda en base de datos para el flujo de prueba gratuita
+// NOTA: Este archivo ahora usa los repositorios para abstraer las queries
 import { logSession } from '../../utils/logger/index.js';
-import { getPrisma } from '../../config/database.js';
+import * as clientRepository from '../../repositories/clientRepository.js';
 
 /**
  * Verifica si el usuario ya tiene una sesión pendiente de QR
@@ -9,28 +10,21 @@ import { getPrisma } from '../../config/database.js';
  */
 export async function findPendingSessionByPhone(phoneNumber) {
   try {
-    const db = getPrisma();
-    // Buscar cliente por contact_phone
-    const client = await db.client.findFirst({
-      where: {
-        contact_phone: phoneNumber,
-        status: 'trial' // Solo clientes en prueba
-      },
-      include: {
-        sessions: {
-          where: {
-            session_type: 'client',
-            status: { in: ['qr_pending', 'connecting'] } // Sesiones pendientes de QR
-          }
-        }
-      }
-    });
+    const client = await clientRepository.getClientByPhone(phoneNumber);
     
-    if (client && client.sessions.length > 0) {
-      return {
-        client,
-        session: client.sessions[0]
-      };
+    if (client && client.status === 'trial' && client.sessions && client.sessions.length > 0) {
+      // Filtrar sesiones pendientes de QR
+      const pendingSessions = client.sessions.filter(s => 
+        s.session_type === 'client' && 
+        ['qr_pending', 'connecting'].includes(s.status)
+      );
+      
+      if (pendingSessions.length > 0) {
+        return {
+          client,
+          session: pendingSessions[0]
+        };
+      }
     }
     
     return null;
@@ -45,37 +39,6 @@ export async function findPendingSessionByPhone(phoneNumber) {
  * @returns {Promise<Object|null>} Cliente con su sesión o null
  */
 export async function findClientByPhone(phoneNumber) {
-  try {
-    const db = getPrisma();
-    // Buscar cliente por contact_phone (normalizado)
-    const { normalizePhoneNumber } = await import('../../utils/validation/phoneValidator.js');
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    
-    // Buscar con diferentes variantes del número
-    const client = await db.client.findFirst({
-      where: {
-        OR: [
-          { contact_phone: phoneNumber },
-          { contact_phone: normalizedPhone },
-          { contact_phone: { contains: normalizedPhone.replace(/^54/, '') } } // Sin código de país
-        ]
-      },
-      include: {
-        sessions: {
-          where: {
-            session_type: 'client'
-          },
-          orderBy: {
-            created_at: 'desc'
-          }
-        }
-      }
-    });
-    
-    return client;
-  } catch (error) {
-    logSession('trialFlow', `⚠️ Error buscando cliente por número: ${error?.message || error}`);
-    return null;
-  }
+  return await clientRepository.getClientByPhone(phoneNumber);
 }
 
