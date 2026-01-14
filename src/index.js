@@ -1,8 +1,24 @@
 // Entry point principal del bot
-// Cargar variables de entorno desde .env
-import 'dotenv/config';
-
+// Cargar variables de entorno desde .env y .env.local (si existe)
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import fs from 'fs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = join(__dirname, '..', '..');
+
+// Cargar .env primero (valores por defecto)
+dotenv.config({ path: join(PROJECT_ROOT, '.env') });
+
+// Si existe .env.local, cargarlo después (sobrescribe .env)
+// Esto permite usar la base de datos del VPS cuando se ejecuta localmente
+const localEnvPath = join(PROJECT_ROOT, '.env.local');
+if (fs.existsSync(localEnvPath)) {
+  dotenv.config({ path: localEnvPath, override: true });
+  console.log('📝 Usando configuración de .env.local (sobrescribe .env)');
+}
 import express from 'express';
 import { log } from './utils/logger/index.js';
 import { config, loadSessionsConfig } from './config/index.js';

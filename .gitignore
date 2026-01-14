@@ -25,3 +25,6 @@ wwebjs_auth/
 
 # NOTA: Las carpetas de sesiones (sessions/cliente_1/, etc.) SÍ se suben a GitHub
 # porque se necesitan en producción para mantener las sesiones activas
+
+# Archivos de configuración local (no subir a GitHub)
+.env.local

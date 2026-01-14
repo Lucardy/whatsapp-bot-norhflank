@@ -166,8 +166,8 @@ export const RATE_LIMIT_MAX_GENERAL = 100;
 /** Máximo de requests para rate limiting estricto (10 requests) */
 export const RATE_LIMIT_MAX_STRICT = 10;
 
-/** Máximo de requests para rate limiting de QR (50 requests) */
-export const RATE_LIMIT_MAX_QR = 50;
+/** Máximo de requests para rate limiting de QR (200 requests) */
+export const RATE_LIMIT_MAX_QR = 200;
 
 /** Máximo de requests para rate limiting de health check (200 requests) */
 export const RATE_LIMIT_MAX_HEALTH = 200;

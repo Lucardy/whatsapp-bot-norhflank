@@ -24,8 +24,14 @@ export function setupRoutes(app, sessionManager, sessionsConfig) {
   app.use(securityHeaders);
   app.use(inputValidation);
   
-  // Aplicar rate limiting general a todas las rutas
-  app.use(generalLimiter);
+  // Aplicar rate limiting general a todas las rutas EXCEPTO /qr/*
+  app.use((req, res, next) => {
+    // Excluir rutas de QR del rate limit general (tienen su propio rate limiter)
+    if (req.path.startsWith('/qr/')) {
+      return next();
+    }
+    return generalLimiter(req, res, next);
+  });
   
   // Configurar rutas de onboarding (con rate limiting estricto para POST)
   setupOnboardingRoutes(app, sessionManager);
