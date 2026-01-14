@@ -54,16 +54,25 @@ export async function handleMessage(msg, sessionId) {
   logIncomingMessage(sessionId, msg, messageData);
   
   try {
-    // 1. Validar sesión y estado
-    const sessionValidation = await validateSession(sessionId);
-    if (!sessionValidation.valid) {
-      return; // Sesión no válida, ignorar mensaje
-    }
-    
-    // 2. Obtener tipo de sesión
+    // 2. Obtener tipo de sesión (antes de validar sesión, para saber si es cliente)
     const { getSessionType } = await import('../database/sessionService.js');
     const sessionType = await getSessionType(sessionId);
     logSession(sessionId, `🔍 Tipo de sesión detectado: ${sessionType}`);
+    
+    // 1. Validar sesión y estado
+    // EXCEPCIÓN: Permitir mensajes fromMe en sesión cliente incluso si no está conectada
+    // También permitir comandos del menú (menu, menú, ayuda, etc.) en sesión cliente aunque no esté conectada
+    // Esto permite que el cliente acceda al menú para ver el link de pago cuando su sesión está suspendida
+    const isClientSelfMessage = msg.fromMe && sessionType === 'client';
+    const textoLower = texto?.toLowerCase().trim() || '';
+    const menuCommands = ['menu', 'menú', 'ayuda', 'help', 'estadisticas', 'estadísticas', 'stats'];
+    const isMenuCommand = menuCommands.includes(textoLower);
+    const allowUnconnected = isClientSelfMessage || (sessionType === 'client' && isMenuCommand);
+    
+    const sessionValidation = await validateSession(sessionId, allowUnconnected);
+    if (!sessionValidation.valid) {
+      return; // Sesión no válida, ignorar mensaje
+    }
     
     // 2.1. Verificar si el bot está activado para sesiones de clientes (antes de procesar)
     if (sessionType === 'client') {
@@ -120,10 +129,13 @@ export async function handleMessage(msg, sessionId) {
     }
     
     // 3. Procesar mensajes propios del cliente (fromMe en sesión cliente)
+    logSession(sessionId, `🔍 Verificando si procesar como mensaje propio del cliente - fromMe: ${msg.fromMe}, sessionType: ${sessionType}, texto: "${texto}"`);
     const selfMessageProcessed = await processClientSelfMessage(msg, sessionId, chatId, texto, sessionType);
     if (selfMessageProcessed) {
+      logSession(sessionId, `✅ Mensaje procesado como mensaje propio del cliente`);
       return; // Mensaje procesado
     }
+    logSession(sessionId, `ℹ️ Mensaje NO procesado como mensaje propio del cliente, continuando con flujo normal`);
     
     // 4. Procesar mensajes del dueño (modo admin)
     const adminProcessed = await processOwnerMessage(msg, sessionId);

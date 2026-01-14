@@ -1,4 +1,7 @@
 // Entry point principal del bot
+// Cargar variables de entorno desde .env
+import 'dotenv/config';
+
 import fs from 'fs';
 import express from 'express';
 import { log } from './utils/logger/index.js';

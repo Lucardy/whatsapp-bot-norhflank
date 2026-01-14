@@ -1,6 +1,6 @@
-// Scheduler para verificación diaria de expiración de trials
+// Scheduler para verificación diaria de expiración de trials y suscripciones
 import { log } from '../../utils/logger/index.js';
-import { checkTrialExpiration } from './subscriptionService.js';
+import { checkTrialExpiration, checkActiveSubscriptionExpiration } from './subscriptionService.js';
 
 let schedulerInterval = null;
 let isRunning = false;
@@ -20,9 +20,12 @@ export function startSubscriptionScheduler(runImmediately = false) {
 
   // Ejecutar inmediatamente si se solicita
   if (runImmediately) {
-    log('🔍 Ejecutando verificación inicial de trials...');
+    log('🔍 Ejecutando verificación inicial de trials y suscripciones...');
     checkTrialExpiration().catch(err => {
-      log(`❌ Error en verificación inicial: ${err?.message || err}`);
+      log(`❌ Error en verificación inicial de trials: ${err?.message || err}`);
+    });
+    checkActiveSubscriptionExpiration().catch(err => {
+      log(`❌ Error en verificación inicial de suscripciones: ${err?.message || err}`);
     });
   }
 
@@ -36,16 +39,22 @@ export function startSubscriptionScheduler(runImmediately = false) {
 
   // Programar primera ejecución a medianoche
   setTimeout(() => {
-    log('🔍 Ejecutando verificación diaria de trials...');
+    log('🔍 Ejecutando verificación diaria de trials y suscripciones...');
     checkTrialExpiration().catch(err => {
-      log(`❌ Error en verificación diaria: ${err?.message || err}`);
+      log(`❌ Error en verificación diaria de trials: ${err?.message || err}`);
+    });
+    checkActiveSubscriptionExpiration().catch(err => {
+      log(`❌ Error en verificación diaria de suscripciones: ${err?.message || err}`);
     });
 
     // Configurar intervalo diario (24 horas)
     schedulerInterval = setInterval(() => {
-      log('🔍 Ejecutando verificación diaria de trials...');
+      log('🔍 Ejecutando verificación diaria de trials y suscripciones...');
       checkTrialExpiration().catch(err => {
-        log(`❌ Error en verificación diaria: ${err?.message || err}`);
+        log(`❌ Error en verificación diaria de trials: ${err?.message || err}`);
+      });
+      checkActiveSubscriptionExpiration().catch(err => {
+        log(`❌ Error en verificación diaria de suscripciones: ${err?.message || err}`);
       });
     }, 24 * 60 * 60 * 1000); // 24 horas en milisegundos
 
@@ -71,6 +80,11 @@ export function stopSubscriptionScheduler() {
  * @returns {Promise<Object>} Resumen de la verificación
  */
 export async function runManualCheck() {
-  log('🔍 Ejecutando verificación manual de trials...');
-  return await checkTrialExpiration();
+  log('🔍 Ejecutando verificación manual de trials y suscripciones...');
+  const trialResult = await checkTrialExpiration();
+  const subscriptionResult = await checkActiveSubscriptionExpiration();
+  return {
+    trials: trialResult,
+    subscriptions: subscriptionResult
+  };
 }

@@ -17,17 +17,22 @@ import { processClientMenu } from './clientMenuProcessor.js';
 export async function processClientSelfMessage(msg, sessionId, chatId, texto, sessionType) {
   // Solo procesar si es mensaje propio en sesión cliente
   if (!msg.fromMe || sessionType !== 'client') {
+    logSession(sessionId, `🔍 processClientSelfMessage: No procesando - fromMe: ${msg.fromMe}, sessionType: ${sessionType}`);
     return false;
   }
 
   const textoLower = texto.toLowerCase().trim();
+  logSession(sessionId, `🔍 processClientSelfMessage: Procesando mensaje propio en sesión cliente - texto: "${textoLower}", chatId: ${chatId}`);
   
   // Resolver información del cliente primero
   const { clientId } = await resolveClientInfo(sessionId, chatId, sessionType);
   
   if (!clientId) {
+    logSession(sessionId, `⚠️ processClientSelfMessage: No se pudo resolver clientId para chatId: ${chatId}`);
     return false;
   }
+  
+  logSession(sessionId, `✅ processClientSelfMessage: clientId resuelto: ${clientId}`);
 
   // PRIORIDAD 1: Si está en modo configuración, procesar ahí
   const configProcessed = await processConfigurationMode(msg, sessionId, chatId, clientId, texto);

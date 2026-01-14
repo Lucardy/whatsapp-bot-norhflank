@@ -56,7 +56,7 @@ export async function startTrialFlow(phoneNumber, sessionId, sessionManager = nu
     const { findClientByPhone } = await import('./dbQueries.js');
     const existingClient = await findClientByPhone(realPhoneNumber);
     
-      if (existingClient) {
+    if (existingClient) {
       logSession(sessionId, `✅ Cliente existente encontrado: ${existingClient.name} (ID: ${existingClient.id}, status: ${existingClient.status})`);
       
       // Si el cliente está suspendido, mostrar mensaje especial pero permitir continuar
@@ -99,26 +99,46 @@ export async function startTrialFlow(phoneNumber, sessionId, sessionManager = nu
       let welcomeMessage = null;
       
       if (existingClient.name && existingClient.contact_email) {
-        // Tiene nombre y email, continuar desde QR_PHONE
-        initialStep = TrialStep.QR_PHONE;
+        // Tiene nombre y email
         if (existingClient.status === 'suspended') {
-          welcomeMessage = `⚠️ *¡Hola de nuevo, ${existingClient.name}!* 👋
+          // Cliente suspendido con datos completos: solo mostrar link de pago, NO crear trialSession
+          // La sesión sigue guardada, solo necesita pagar para reactivarse
+          const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+          const paymentResult = await generatePaymentLink(existingClient.id, null, sessionId);
+          
+          let paymentLinkText = '';
+          if (paymentResult.success && paymentResult.paymentLink) {
+            paymentLinkText = `💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+          } else {
+            paymentLinkText = `📞 *Contacta con nosotros* para reactivar tu cuenta.\n\n`;
+          }
+          
+          const welcomeMessage = `⚠️ *Tu cuenta está suspendida*
+
+🎉 *¡Hola de nuevo, ${existingClient.name}!* 👋
 
 Veo que tu cuenta está suspendida porque tu período de prueba finalizó.
 
-Puedes obtener un nuevo código QR para reactivar tu bot.
+💳 *Para reactivar tu bot, necesitas realizar el pago.* Una vez que realices el pago, tu bot se reactivará automáticamente *sin necesidad de escanear un nuevo QR* (tu sesión sigue guardada).
 
-📱 *¿A qué número quieres que te enviemos el código QR?*
+${paymentLinkText}💡 *Importante:* Si ya realizaste el pago, espera unos minutos y tu bot se reactivará automáticamente.
 
-Puede ser el número de un amigo, familiar, o cualquier otro teléfono donde puedas escanear el QR.
-
-⚠️ *Importante:* El QR debe escanearse desde el WhatsApp donde quieres tener el bot (el número donde se activará tu bot).
-
-💡 O escribe *"aquí"* para recibirlo en este mismo número
-
-💡 Escribe "cancelar" si quieres salir.`;
-        } else {
-          welcomeMessage = `¡Hola de nuevo, *${existingClient.name}*! 👋
+💡 Escribe "menu" para ver más opciones.`;
+          
+          // NO crear trialSession, solo retornar el mensaje de pago
+          return {
+            message: welcomeMessage,
+            hasPendingSession: false,
+            sessionName: null,
+            qrDataURL: null,
+            isExistingClient: true,
+            isSuspended: true // Flag para indicar que es cliente suspendido
+          };
+        }
+        
+        // Cliente activo/trial con datos completos, continuar desde QR_PHONE
+        initialStep = TrialStep.QR_PHONE;
+        welcomeMessage = `¡Hola de nuevo, *${existingClient.name}*! 👋
 
 Veo que ya tienes tus datos guardados. Continuemos con el proceso.
 
@@ -131,19 +151,30 @@ Puede ser el número de un amigo, familiar, o cualquier otro teléfono donde pue
 💡 O escribe *"aquí"* para recibirlo en este mismo número
 
 💡 Escribe "cancelar" si quieres salir.`;
-        }
       } else if (existingClient.name) {
         // Tiene nombre pero no email, continuar desde EMAIL
         initialStep = TrialStep.EMAIL;
         if (existingClient.status === 'suspended') {
-          welcomeMessage = `⚠️ *¡Hola de nuevo, ${existingClient.name}!* 👋
+          // Generar link de pago
+          const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+          const paymentResult = await generatePaymentLink(existingClient.id, null, sessionId);
+          
+          let paymentLinkText = '';
+          if (paymentResult.success && paymentResult.paymentLink) {
+            paymentLinkText = `💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+          } else {
+            paymentLinkText = `📞 *Contacta con nosotros* para reactivar tu cuenta.\n\n`;
+          }
+          
+          welcomeMessage = `⚠️ *Tu cuenta está suspendida*
+
+🎉 *¡Hola de nuevo, ${existingClient.name}!* 👋
 
 Veo que tu cuenta está suspendida porque tu período de prueba finalizó.
 
-Puedes completar el registro para obtener un nuevo código QR y reactivar tu bot.
+💳 *Para reactivar tu bot, necesitas realizar el pago.* Una vez que realices el pago, tu bot se reactivará automáticamente *sin necesidad de escanear un nuevo QR* (tu sesión sigue guardada).
 
-📧 *Tu email (opcional):*
-Puedes saltar este paso escribiendo "saltar".
+${paymentLinkText}💡 *Importante:* Si ya realizaste el pago, espera unos minutos y tu bot se reactivará automáticamente.
 
 💡 Escribe "cancelar" si quieres salir.`;
         } else {
@@ -160,20 +191,26 @@ Puedes saltar este paso escribiendo "saltar".
         // No tiene nombre (raro pero posible), empezar desde NAME
         initialStep = TrialStep.NAME;
         if (existingClient.status === 'suspended') {
-          welcomeMessage = `⚠️ *Cuenta suspendida detectada*
+          // Generar link de pago
+          const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+          const paymentResult = await generatePaymentLink(existingClient.id, null, sessionId);
+          
+          let paymentLinkText = '';
+          if (paymentResult.success && paymentResult.paymentLink) {
+            paymentLinkText = `💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+          } else {
+            paymentLinkText = `📞 *Contacta con nosotros* para reactivar tu cuenta.\n\n`;
+          }
+          
+          welcomeMessage = `⚠️ *Tu cuenta está suspendida*
 
 Veo que tienes una cuenta suspendida con nosotros.
 
-Puedes volver a registrarte para obtener un nuevo código QR y reactivar tu bot.
+💳 *Para reactivar tu bot, necesitas realizar el pago.* Una vez que realices el pago, tu bot se reactivará automáticamente *sin necesidad de escanear un nuevo QR* (tu sesión sigue guardada).
 
-📝 *Paso 1: Tu nombre*
-Por favor, escribe tu nombre o el nombre de tu negocio.
+${paymentLinkText}💡 *Importante:* Si ya realizaste el pago, espera unos minutos y tu bot se reactivará automáticamente.
 
-💡 Ejemplo: "Juan" o "Mi Negocio"
-
-💡 *Comandos disponibles:*
-• "cancelar" - Salir del proceso
-• "ayuda" - Ver ayuda contextual en cualquier momento`;
+💡 Escribe "cancelar" si quieres salir.`;
         } else {
           welcomeMessage = buildWelcomeMessage();
         }

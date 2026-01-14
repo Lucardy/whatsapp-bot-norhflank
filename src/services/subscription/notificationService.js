@@ -56,14 +56,22 @@ export async function sendSuspendedNotification(clientId) {
       ? clientPhone 
       : `${clientPhone}@c.us`;
 
+    // Generar link de pago
+    const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+    const paymentResult = await generatePaymentLink(clientId, null, 'subscription');
+    
+    let paymentLinkText = '';
+    if (paymentResult.success && paymentResult.paymentLink) {
+      paymentLinkText = `\n💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n`;
+    } else {
+      paymentLinkText = `\n📞 *Contacta con nosotros* para reactivar tu cuenta y elegir un plan.\n`;
+    }
+
     const message = `⚠️ *Tu cuenta ha sido suspendida*
 
 Tu período de prueba gratuita de 7 días ha finalizado.
 
-Para continuar usando el bot, necesitas activar una suscripción.
-
-📞 *Contacta con nosotros* para reactivar tu cuenta y elegir un plan.
-
+Para continuar usando el bot, necesitas activar una suscripción.${paymentLinkText}
 Gracias por usar nuestro servicio.`;
 
     try {

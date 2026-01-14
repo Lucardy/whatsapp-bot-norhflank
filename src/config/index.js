@@ -17,13 +17,14 @@ export async function loadSessionsConfig() {
   }
   
   // Opción 2: Base de datos (si está configurada)
+  // IMPORTANTE: Incluir también 'suspended' para que los clientes suspendidos puedan acceder al menú y ver el link de pago
   try {
     const db = getPrisma();
     const sessions = await db.whatsAppSession.findMany({
       where: {
         client: {
           status: {
-            in: ['active', 'trial']
+            in: ['active', 'trial', 'suspended']
           }
         }
       },

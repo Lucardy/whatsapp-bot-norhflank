@@ -25,9 +25,19 @@ export async function isClientBlocked(client) {
 
 export async function showClientMenu(clientId, sessionId) {
   try {
+    const { logSession } = await import('../../utils/logger/index.js');
+    logSession(sessionId, `📋 showClientMenu iniciado para cliente ${clientId}`);
+    
     const config = await getClientConfigById(clientId, sessionId);
     const { getClientById } = await import('../database/clientService.js');
     const client = await getClientById(clientId);
+    
+    if (!client) {
+      logSession(sessionId, `❌ Cliente ${clientId} no encontrado en showClientMenu`);
+      return '❌ Error: Cliente no encontrado. Por favor, contacta con soporte.';
+    }
+    
+    logSession(sessionId, `📋 Cliente encontrado: ${client.name} (status: ${client.status})`);
     
     const botStatus = config?.bot_enabled !== false ? '✅ Activado' : '❌ Desactivado';
     const accountStatus = client?.status || 'unknown';
@@ -37,19 +47,53 @@ export async function showClientMenu(clientId, sessionId) {
     
     let statusMessage = '';
     if (accountStatus === 'suspended') {
-      statusMessage = `\n🚫 *Estado de cuenta:* Suspendida\n\n`;
-      statusMessage += `⚠️ *Tu período de prueba ha finalizado.*\n\n`;
-      statusMessage += `💳 *Para continuar usando el bot y aprovechar todos los beneficios, necesitas activar una suscripción.*\n\n`;
-      statusMessage += `📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n`;
+      // Generar link de pago
+      try {
+        const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+        const paymentResult = await generatePaymentLink(clientId, null, sessionId);
+        
+        let paymentLinkText = '';
+        if (paymentResult.success && paymentResult.paymentLink) {
+          paymentLinkText = `💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+        } else {
+          // Log del error para debugging
+          const { logSession } = await import('../../utils/logger/index.js');
+          logSession(sessionId, `⚠️ Error generando link de pago para cliente ${clientId}: ${paymentResult.error || 'Error desconocido'}`);
+          paymentLinkText = `📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+        }
+        
+        statusMessage = `\n🚫 *Estado de cuenta:* Suspendida\n\n`;
+        statusMessage += `⚠️ *Tu período de prueba ha finalizado.*\n\n`;
+        statusMessage += `💳 *Para continuar usando el bot y aprovechar todos los beneficios, necesitas activar una suscripción.*\n\n`;
+        statusMessage += paymentLinkText;
+      } catch (error) {
+        const { logSession } = await import('../../utils/logger/index.js');
+        logSession(sessionId, `❌ Error al generar link de pago: ${error?.message || error}`);
+        statusMessage = `\n🚫 *Estado de cuenta:* Suspendida\n\n`;
+        statusMessage += `⚠️ *Tu período de prueba ha finalizado.*\n\n`;
+        statusMessage += `💳 *Para continuar usando el bot y aprovechar todos los beneficios, necesitas activar una suscripción.*\n\n`;
+        statusMessage += `📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+      }
     } else if (accountStatus === 'trial') {
       const { getTrialDaysRemaining } = await import('../subscription/subscriptionService.js');
       const daysRemaining = getTrialDaysRemaining(client.created_at);
       if (daysRemaining > 0) {
         statusMessage = `\n⏰ *Prueba:* ${daysRemaining} día${daysRemaining !== 1 ? 's' : ''} restante${daysRemaining !== 1 ? 's' : ''}\n`;
       } else {
+        // Generar link de pago para trial expirado
+        const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+        const paymentResult = await generatePaymentLink(clientId, null, sessionId);
+        
+        let paymentLinkText = '';
+        if (paymentResult.success && paymentResult.paymentLink) {
+          paymentLinkText = `💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+        } else {
+          paymentLinkText = `📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+        }
+        
         statusMessage = `\n⚠️ *Prueba:* Finalizada\n\n`;
         statusMessage += `💳 *Para continuar usando el bot y aprovechar todos los beneficios, necesitas activar una suscripción.*\n\n`;
-        statusMessage += `📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n`;
+        statusMessage += paymentLinkText;
       }
     } else if (accountStatus === 'active') {
       statusMessage = `\n✅ *Estado de cuenta:* Activa\n`;
@@ -121,14 +165,23 @@ export async function toggleBot(clientId, enabled, sessionId) {
       
       // Si está suspendido, no permitir activar
       if (client.status === 'suspended') {
+        // Generar link de pago
+        const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+        const paymentResult = await generatePaymentLink(clientId, null, sessionId);
+        
+        let paymentLinkText = '';
+        if (paymentResult.success && paymentResult.paymentLink) {
+          paymentLinkText = `\n💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+        } else {
+          paymentLinkText = `\n📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+        }
+        
         logSession(sessionId, `⚠️ Cliente ${clientId} intentó activar bot pero está suspendido`);
         return `🚫 *No se puede activar el bot*
 
 Tu período de prueba ha finalizado y tu cuenta está suspendida.
 
-💳 *Para continuar usando el bot, necesitas activar una suscripción.*
-
-📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.`;
+💳 *Para continuar usando el bot, necesitas activar una suscripción.*${paymentLinkText}`;
       }
       
       // Si está en trial pero ya expiró, no permitir activar
@@ -137,14 +190,23 @@ Tu período de prueba ha finalizado y tu cuenta está suspendida.
         const daysRemaining = getTrialDaysRemaining(client.created_at);
         
         if (daysRemaining <= 0) {
+          // Generar link de pago
+          const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+          const paymentResult = await generatePaymentLink(clientId, null, sessionId);
+          
+          let paymentLinkText = '';
+          if (paymentResult.success && paymentResult.paymentLink) {
+            paymentLinkText = `\n💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+          } else {
+            paymentLinkText = `\n📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+          }
+          
           logSession(sessionId, `⚠️ Cliente ${clientId} intentó activar bot pero el trial expiró (${daysRemaining} días restantes)`);
           return `🚫 *No se puede activar el bot*
 
 Tu período de prueba ha finalizado.
 
-💳 *Para continuar usando el bot, necesitas activar una suscripción.*
-
-📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.`;
+💳 *Para continuar usando el bot, necesitas activar una suscripción.*${paymentLinkText}`;
         }
       }
     }

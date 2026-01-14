@@ -147,6 +147,65 @@ export async function checkTrialExpiration() {
 }
 
 /**
+ * Verifica y procesa la expiración de suscripciones activas
+ * - Suspende clientes activos cuya fecha de vencimiento (expires_at) ya pasó
+ * @returns {Promise<Object>} Resumen de acciones realizadas
+ */
+export async function checkActiveSubscriptionExpiration() {
+  const summary = {
+    checked: 0,
+    suspended: 0,
+    errors: 0
+  };
+
+  try {
+    const db = getPrisma();
+    const now = new Date();
+    
+    // Buscar clientes activos con fecha de vencimiento pasada
+    const expiredClients = await db.client.findMany({
+      where: {
+        status: 'active',
+        expires_at: {
+          lt: now // expires_at < now (ya venció)
+        }
+      },
+      include: {
+        config: true
+      }
+    });
+
+    summary.checked = expiredClients.length;
+    logSession('subscription', `🔍 Verificando ${expiredClients.length} cliente(s) activo(s) con suscripción vencida...`);
+
+    for (const client of expiredClients) {
+      try {
+        logSession('subscription', `⏰ Cliente ${client.id} (${client.name}) - Suscripción vencida (venció: ${client.expires_at?.toLocaleDateString() || 'N/A'})`);
+        
+        // Suspender el cliente
+        await clientRepository.updateClient(client.id, {
+          status: 'suspended'
+        });
+
+        // Enviar notificación de suspensión (con link de pago)
+        await sendSuspendedNotification(client.id);
+        summary.suspended++;
+      } catch (error) {
+        logSession('subscription', `❌ Error procesando cliente ${client.id}: ${error?.message || error}`);
+        summary.errors++;
+      }
+    }
+
+    logSession('subscription', `✅ Verificación de suscripciones completada: ${summary.checked} revisados, ${summary.suspended} suspendidos, ${summary.errors} errores`);
+    return summary;
+  } catch (error) {
+    logSession('subscription', `❌ Error en verificación de suscripciones: ${error?.message || error}`);
+    summary.errors++;
+    return summary;
+  }
+}
+
+/**
  * Verifica si un cliente está suspendido
  * @param {number} clientId - ID del cliente
  * @returns {Promise<boolean>} true si está suspendido

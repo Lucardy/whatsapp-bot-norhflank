@@ -4,6 +4,7 @@ import { setupOnboardingRoutes } from './onboarding.js';
 import { setupQRRoutes } from './qr/qrRoutes.js';
 import { setupSessionRoutes } from './sessions/sessionRoutes.js';
 import { setupHealthRoutes } from './health/healthRoutes.js';
+import { setupPaymentRoutes } from './payments/paymentRoutes.js';
 import { generalLimiter, strictLimiter, qrLimiter, healthLimiter } from '../middleware/rateLimit.js';
 import { securityHeaders, inputValidation } from '../middleware/security.js';
 import path from 'path';
@@ -41,5 +42,6 @@ export function setupRoutes(app, sessionManager, sessionsConfig) {
   setupHealthRoutes(app, sessionManager);
   setupQRRoutes(app, sessionManager, sessionsConfig);
   setupSessionRoutes(app, sessionManager, sessionsConfig);
+  setupPaymentRoutes(app); // Rutas de pagos y webhooks
 }
 

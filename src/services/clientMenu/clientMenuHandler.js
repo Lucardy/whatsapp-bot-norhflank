@@ -107,13 +107,22 @@ export async function handleClientMenuOption(msg, clientId, sessionId, texto) {
       
       // Si está suspendido o el trial expiró, no permitir activar
       if (client.status === 'suspended') {
+        // Generar link de pago
+        const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+        const paymentResult = await generatePaymentLink(clientId, null, sessionId);
+        
+        let paymentLinkText = '';
+        if (paymentResult.success && paymentResult.paymentLink) {
+          paymentLinkText = `\n💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+        } else {
+          paymentLinkText = `\n📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+        }
+        
         await sendBotMessage(msg, sessionId, chatId, `🚫 *No se puede activar el bot*
 
 Tu período de prueba ha finalizado y tu cuenta está suspendida.
 
-💳 *Para continuar usando el bot, necesitas activar una suscripción.*
-
-📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.`);
+💳 *Para continuar usando el bot, necesitas activar una suscripción.*${paymentLinkText}`);
         logSession(sessionId, `⚠️ Cliente ${clientId} intentó activar bot pero está suspendido`);
         return true;
       }
@@ -124,13 +133,22 @@ Tu período de prueba ha finalizado y tu cuenta está suspendida.
         const daysRemaining = getTrialDaysRemaining(client.created_at);
         
         if (daysRemaining <= 0) {
+          // Generar link de pago
+          const { generatePaymentLink } = await import('../payments/mercadopagoService.js');
+          const paymentResult = await generatePaymentLink(clientId, null, sessionId);
+          
+          let paymentLinkText = '';
+          if (paymentResult.success && paymentResult.paymentLink) {
+            paymentLinkText = `\n💳 *Pagar ahora:*\n${paymentResult.paymentLink}\n\n`;
+          } else {
+            paymentLinkText = `\n📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.\n\n`;
+          }
+          
           await sendBotMessage(msg, sessionId, chatId, `🚫 *No se puede activar el bot*
 
 Tu período de prueba ha finalizado.
 
-💳 *Para continuar usando el bot, necesitas activar una suscripción.*
-
-📞 *Contacta con nosotros* para elegir un plan y mantener tu bot activo.`);
+💳 *Para continuar usando el bot, necesitas activar una suscripción.*${paymentLinkText}`);
           logSession(sessionId, `⚠️ Cliente ${clientId} intentó activar bot pero el trial expiró (${daysRemaining} días restantes)`);
           return true;
         }
@@ -252,17 +270,24 @@ Tu período de prueba ha finalizado.
  */
 export async function showMenu(msg, clientId, sessionId) {
   try {
+    logSession(sessionId, `📋 showMenu llamado para cliente ${clientId}`);
     enterClientMenu(clientId);
+    logSession(sessionId, `📋 Generando mensaje del menú para cliente ${clientId}...`);
     const menuMessage = await showClientMenu(clientId, sessionId);
+    logSession(sessionId, `📋 Mensaje del menú generado (longitud: ${menuMessage?.length || 0} caracteres)`);
+    
     // Para mensajes propios (fromMe), usar msg.to para obtener el chatId correcto
     // Para mensajes recibidos, usar msg.from
     const chatId = msg.fromMe 
       ? ((msg.to || msg.from || '').split('@')[0] || '')
       : ((msg.from || '').split('@')[0] || '');
+    
+    logSession(sessionId, `📋 Enviando menú a chatId: ${chatId} (fromMe: ${msg.fromMe})`);
     await sendBotMessage(msg, sessionId, chatId, menuMessage);
     logSession(sessionId, `✅ Menú mostrado para cliente ${clientId}`);
   } catch (err) {
     logSession(sessionId, `❌ Error mostrando menú: ${err?.message || err}`);
+    logSession(sessionId, `❌ Stack: ${err?.stack || 'N/A'}`);
   }
 }
 
