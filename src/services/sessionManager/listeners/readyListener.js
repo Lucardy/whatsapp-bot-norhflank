@@ -14,6 +14,14 @@ export function setupReadyListener(client, sessionId, sessionPath, sessionData) 
   client.once('ready', async () => {
     logSession(sessionId, '🎉 EVENTO READY RECIBIDO - Sesión completamente conectada');
     
+    // Verificar el estado inmediatamente
+    try {
+      const state = await client.getState().catch(() => null);
+      logSession(sessionId, `📊 Estado en evento ready: ${state || 'null'}`);
+    } catch (err) {
+      logSession(sessionId, `⚠️ Error obteniendo estado en ready: ${err?.message || err}`);
+    }
+    
     // Si forceQR está activo, mantener el QR disponible por un tiempo
     // Esto permite que el usuario pueda escanearlo incluso si se conectó rápido
     const clearQR = !sessionData.forceQR;

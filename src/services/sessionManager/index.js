@@ -140,6 +140,11 @@ export class SessionManager {
         // Ejecutar initialize() sin await para no bloquear, pero capturar errores
         const initPromise = sessionData.client.initialize();
         
+        // Agregar listener para errores no capturados de Puppeteer
+        sessionData.client.pupPage?.on('error', (error) => {
+          logSession(sessionId, `❌ Error de Puppeteer: ${error?.message || error}`);
+        });
+        
         // Esperar un poco y verificar si hay progreso
         setTimeout(async () => {
           try {
@@ -147,9 +152,25 @@ export class SessionManager {
             logSession(sessionId, `📊 Estado después de 10 segundos: ${state || 'null'}`);
             if (sessionData.lastQRDataURL) {
               logSession(sessionId, `✅ QR generado después de 10 segundos`);
+            } else {
+              logSession(sessionId, `⚠️ QR aún no generado después de 10 segundos`);
+              logSession(sessionId, `   Verificando si hay errores de Puppeteer...`);
+              
+              // Verificar si el proceso de Chrome está corriendo
+              try {
+                const browser = sessionData.client.pupBrowser;
+                if (browser) {
+                  const pages = await browser.pages();
+                  logSession(sessionId, `   Chrome tiene ${pages.length} página(s) abierta(s)`);
+                } else {
+                  logSession(sessionId, `   ⚠️ Browser de Puppeteer no está disponible`);
+                }
+              } catch (browserErr) {
+                logSession(sessionId, `   ⚠️ No se pudo verificar estado del browser: ${browserErr?.message || browserErr}`);
+              }
             }
           } catch (err) {
-            // Ignorar errores de verificación
+            logSession(sessionId, `⚠️ Error verificando estado: ${err?.message || err}`);
           }
         }, 10000);
         
