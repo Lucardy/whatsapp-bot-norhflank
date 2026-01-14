@@ -1,0 +1,74 @@
+═══════════════════════════════════════════════════════
+COMANDOS PARA INSTALAR POSTGRESQL EN EL VPS
+═══════════════════════════════════════════════════════
+
+Ejecuta estos comandos UNO POR UNO en el terminal web del VPS:
+
+───────────────────────────────────────────────────────
+PASO 1: Instalar PostgreSQL
+───────────────────────────────────────────────────────
+apt update
+apt install -y postgresql postgresql-contrib
+
+───────────────────────────────────────────────────────
+PASO 2: Verificar que está corriendo
+───────────────────────────────────────────────────────
+systemctl status postgresql
+
+───────────────────────────────────────────────────────
+PASO 3: Configurar PostgreSQL
+───────────────────────────────────────────────────────
+sudo -u postgres psql
+
+(Dentro del prompt de PostgreSQL, ejecuta estos comandos):
+
+CREATE DATABASE whatsapp_bot;
+CREATE USER whatsapp_user WITH PASSWORD 'TuContraseñaSegura123!';
+GRANT ALL PRIVILEGES ON DATABASE whatsapp_bot TO whatsapp_user;
+\q
+
+⚠️ IMPORTANTE: Cambia 'TuContraseñaSegura123!' por una contraseña segura
+               y GUÁRDALA porque la necesitarás después.
+
+───────────────────────────────────────────────────────
+PASO 4: Configurar autenticación
+───────────────────────────────────────────────────────
+nano /etc/postgresql/*/main/pg_hba.conf
+
+Busca la línea que dice:
+local   all             all                                     peer
+
+Cámbiala a:
+local   all             all                                     md5
+
+Guarda: Ctrl + X, luego Y, luego Enter
+
+Reiniciar PostgreSQL:
+systemctl restart postgresql
+
+───────────────────────────────────────────────────────
+PASO 5: Actualizar el archivo .env
+───────────────────────────────────────────────────────
+cd ~/whatsapp-bot-norhflank
+nano .env
+
+Busca esta línea:
+DATABASE_URL=postgresql://user:password@localhost:5432/whatsapp_bot
+
+Cámbiala a (reemplaza TU_CONTRASEÑA con la que creaste):
+DATABASE_URL=postgresql://whatsapp_user:TU_CONTRASEÑA@localhost:5432/whatsapp_bot
+
+Guarda: Ctrl + X, luego Y, luego Enter
+
+───────────────────────────────────────────────────────
+PASO 6: Ejecutar migraciones
+───────────────────────────────────────────────────────
+npx prisma migrate deploy
+
+───────────────────────────────────────────────────────
+PASO 7: Reiniciar el bot
+───────────────────────────────────────────────────────
+pm2 restart whatsapp-bot
+pm2 logs whatsapp-bot --lines 30
+
+═══════════════════════════════════════════════════════

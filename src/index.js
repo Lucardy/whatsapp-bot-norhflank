@@ -127,9 +127,10 @@ async function start() {
   setupRoutes(app, sessionManager, initialSessions);
   
   try {
-    server = app.listen(config.port, () => {
-      log(`🌐 Servidor web escuchando en http://localhost:${config.port}`);
+    server = app.listen(config.port, '0.0.0.0', () => {
+      log(`🌐 Servidor web escuchando en http://0.0.0.0:${config.port}`);
       log(`💡 Puedes ver los QRs en: http://localhost:${config.port}/qr/[nombre-sesion]`);
+      log(`💡 Acceso externo: http://[TU_IP]:${config.port}/qr/[nombre-sesion]`);
     });
   } catch (err) {
     if (err.code === 'EADDRINUSE') {

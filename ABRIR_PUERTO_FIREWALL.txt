@@ -1,0 +1,31 @@
+═══════════════════════════════════════════════════════
+ABRIR PUERTO 3000 EN EL FIREWALL
+═══════════════════════════════════════════════════════
+
+Ejecuta estos comandos en el terminal web del VPS:
+
+───────────────────────────────────────────────────────
+1. Verificar si el firewall está activo
+───────────────────────────────────────────────────────
+ufw status
+
+───────────────────────────────────────────────────────
+2. Si está activo, abrir el puerto 3000
+───────────────────────────────────────────────────────
+ufw allow 3000/tcp
+
+───────────────────────────────────────────────────────
+3. Verificar que se abrió
+───────────────────────────────────────────────────────
+ufw status
+
+───────────────────────────────────────────────────────
+Si ufw no está instalado o no es el firewall que usa Hostinger:
+───────────────────────────────────────────────────────
+
+Hostinger puede usar otro firewall. Revisa el panel de control de Hostinger:
+1. Ve a tu VPS en el panel de Hostinger
+2. Busca "Firewall" o "Security" o "Red"
+3. Agrega una regla para permitir el puerto 3000 TCP
+
+═══════════════════════════════════════════════════════
