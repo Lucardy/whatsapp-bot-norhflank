@@ -25,32 +25,50 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          timeout: 300s
+          command_timeout: 300s
           script: |
+            set -e
+            echo "🚀 Iniciando despliegue..."
+            
             # Navegar al directorio del proyecto
             cd ~/whatsapp-bot-norhflank || cd /opt/whatsapp-bot-norhflank || cd /var/www/whatsapp-bot-norhflank
+            echo "✅ Directorio: $(pwd)"
             
             # Obtener los últimos cambios de GitHub
+            echo "📥 Obteniendo cambios de GitHub..."
             git fetch origin
             git reset --hard origin/main || git reset --hard origin/master
             git clean -fd
+            echo "✅ Código actualizado"
             
             # Instalar dependencias
+            echo "📦 Instalando dependencias..."
             npm install --production --no-audit --no-fund
+            echo "✅ Dependencias instaladas"
             
             # Generar Prisma Client
+            echo "🗄️ Generando Prisma Client..."
             npx prisma generate
+            echo "✅ Prisma Client generado"
             
             # Ejecutar migraciones (si hay cambios)
-            npx prisma migrate deploy || echo "No hay migraciones pendientes"
+            echo "🔄 Ejecutando migraciones..."
+            npx prisma migrate deploy || echo "⚠️ No hay migraciones pendientes"
             
             # Reiniciar el bot con PM2
+            echo "🔄 Reiniciando bot..."
             if command -v pm2 &> /dev/null; then
               if pm2 list | grep -q "whatsapp-bot"; then
                 pm2 restart whatsapp-bot
+                echo "✅ Bot reiniciado"
               else
                 pm2 start src/index.js --name "whatsapp-bot" -- --skip-menu
+                echo "✅ Bot iniciado"
               fi
               pm2 save
+            else
+              echo "⚠️ PM2 no encontrado, el bot debe estar corriendo manualmente"
             fi
             
             echo "✅ Despliegue completado exitosamente!"
