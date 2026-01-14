@@ -1,0 +1,65 @@
+===========================================
+COMANDOS PARA INSTALAR NODE.JS - PASO A PASO
+===========================================
+
+Ya estás conectado al VPS ✅
+Sistema: Ubuntu 24.04.3 LTS ✅
+
+===========================================
+
+PASO 1: Verificar el sistema (corrigiendo el typo)
+---------------------------------------------------
+cat /etc/os-release
+
+(Nota: es "os-release" no "os-realease")
+
+
+PASO 2: Actualizar la lista de paquetes
+-----------------------------------------
+apt update
+
+(Espera a que termine antes de continuar)
+
+
+PASO 3: Actualizar los paquetes instalados
+-------------------------------------------
+apt upgrade -y
+
+(Esto puede tardar unos minutos, espera a que termine)
+
+
+PASO 4: Agregar el repositorio de Node.js 20
+---------------------------------------------
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+
+(Espera a que termine, verás mensajes sobre "Adding the NodeSource signing key")
+
+
+PASO 5: Instalar Node.js
+-------------------------
+apt install -y nodejs
+
+(Espera a que termine la instalación)
+
+
+PASO 6: Verificar que se instaló correctamente
+-----------------------------------------------
+node --version
+
+(Deberías ver algo como: v20.x.x)
+
+
+PASO 7: Verificar npm
+---------------------
+npm --version
+
+(Deberías ver un número de versión como: 10.x.x)
+
+
+===========================================
+INSTRUCCIONES:
+1. Ejecuta cada comando UNO POR UNO
+2. Espera a que termine antes de ejecutar el siguiente
+3. Si ves algún error, cópialo completo y compártelo
+4. No te preocupes si algunos comandos tardan, es normal
+===========================================

@@ -1,0 +1,49 @@
+═══════════════════════════════════════════════════════
+COMANDOS PARA EJECUTAR EN EL TERMINAL WEB DEL VPS
+═══════════════════════════════════════════════════════
+
+Copia y pega estos comandos UNO POR UNO en el terminal web del VPS:
+
+───────────────────────────────────────────────────────
+1. Ir al directorio del proyecto
+───────────────────────────────────────────────────────
+cd ~/whatsapp-bot-norhflank
+
+───────────────────────────────────────────────────────
+2. Ejecutar el script de configuración
+───────────────────────────────────────────────────────
+bash scripts/configurar-vps-ssh.sh
+
+───────────────────────────────────────────────────────
+O si prefieres hacerlo manualmente:
+───────────────────────────────────────────────────────
+
+# Generar clave SSH
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions -N ""
+
+# Agregar al VPS
+cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+chmod 700 ~/.ssh
+
+# Ver la clave privada (CÓPIALA COMPLETA)
+cat ~/.ssh/github_actions
+
+═══════════════════════════════════════════════════════
+DESPUÉS DE EJECUTAR:
+═══════════════════════════════════════════════════════
+
+1. Copia la CLAVE PRIVADA que aparece (empieza con -----BEGIN)
+2. Ve a GitHub: https://github.com/Lucardy/whatsapp-bot-norhflank/settings/secrets/actions
+3. Crea estos secrets:
+   - VPS_HOST = 89.117.33.122
+   - VPS_USER = root
+   - VPS_SSH_KEY = (pega la clave privada completa)
+   - VPS_PORT = 22
+
+4. En tu máquina local:
+   git add .
+   git commit -m "Configurar despliegue automático"
+   git push origin main
+
+═══════════════════════════════════════════════════════

@@ -1,0 +1,50 @@
+===========================================
+COMANDOS PARA INSTALAR NODE.JS EN EL VPS
+===========================================
+
+INFORMACIÓN DEL VPS:
+- Usuario: root
+- IP: 89.117.33.122
+- Contraseña: 8Wjnmyrq123-
+- Sistema: Ubuntu 24.04 LTS
+
+===========================================
+
+PASO 1: Conectarte al VPS
+--------------------------
+En PowerShell, ejecuta:
+ssh root@89.117.33.122
+
+Cuando te pida la contraseña, ingresa: 8Wjnmyrq123-
+(No verás nada mientras escribes, es normal)
+
+
+PASO 2: Verificar el sistema operativo
+---------------------------------------
+cat /etc/os-release
+
+
+PASO 3: Actualizar el sistema
+------------------------------
+apt update
+apt upgrade -y
+
+
+PASO 4: Instalar Node.js 20
+---------------------------
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+
+
+PASO 5: Verificar que funcionó
+------------------------------
+node --version
+npm --version
+
+
+===========================================
+INSTRUCCIONES:
+1. Copia y pega cada comando uno por uno
+2. Espera a que termine antes de ejecutar el siguiente
+3. Si ves algún error, cópialo y compártelo
+===========================================

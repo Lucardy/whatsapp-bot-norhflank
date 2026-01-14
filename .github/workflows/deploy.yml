@@ -1,0 +1,32 @@
+name: Deploy to VPS
+
+# Este workflow se ejecuta cuando haces push a la rama main
+on:
+  push:
+    branches:
+      - main  # Cambia esto si tu rama principal se llama diferente (master, etc)
+
+jobs:
+  deploy:
+    name: Desplegar en VPS
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Paso 1: Verificar el código (checkout)
+      - name: Obtener código del repositorio
+        uses: actions/checkout@v4
+      
+      # Paso 2: Configurar SSH y desplegar
+      - name: Conectar al VPS y desplegar
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # Estos valores vienen de los secrets de GitHub (los configuramos después)
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            # Ejecutar el script de despliegue
+            bash ~/whatsapp-bot-norhflank/scripts/deploy.sh || \
+            bash /opt/whatsapp-bot-norhflank/scripts/deploy.sh || \
+            bash /var/www/whatsapp-bot-norhflank/scripts/deploy.sh
