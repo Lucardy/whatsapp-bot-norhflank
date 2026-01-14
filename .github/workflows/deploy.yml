@@ -26,7 +26,31 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
           script: |
-            # Ejecutar el script de despliegue
-            bash ~/whatsapp-bot-norhflank/scripts/deploy.sh || \
-            bash /opt/whatsapp-bot-norhflank/scripts/deploy.sh || \
-            bash /var/www/whatsapp-bot-norhflank/scripts/deploy.sh
+            # Navegar al directorio del proyecto
+            cd ~/whatsapp-bot-norhflank || cd /opt/whatsapp-bot-norhflank || cd /var/www/whatsapp-bot-norhflank
+            
+            # Obtener los últimos cambios de GitHub
+            git fetch origin
+            git reset --hard origin/main || git reset --hard origin/master
+            git clean -fd
+            
+            # Instalar dependencias
+            npm install --production --no-audit --no-fund
+            
+            # Generar Prisma Client
+            npx prisma generate
+            
+            # Ejecutar migraciones (si hay cambios)
+            npx prisma migrate deploy || echo "No hay migraciones pendientes"
+            
+            # Reiniciar el bot con PM2
+            if command -v pm2 &> /dev/null; then
+              if pm2 list | grep -q "whatsapp-bot"; then
+                pm2 restart whatsapp-bot
+              else
+                pm2 start src/index.js --name "whatsapp-bot" -- --skip-menu
+              fi
+              pm2 save
+            fi
+            
+            echo "✅ Despliegue completado exitosamente!"
